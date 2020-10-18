@@ -1,0 +1,36 @@
+<html>
+
+<head>
+    <title>Talk To Me</title>
+    <!-- The following script is required for SocketIO to work -->
+    <script type="text/javascript"
+        src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.4.8/socket.io.min.js"></script>
+    <!-- The following script is required to handle click events -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+</head>
+
+<body>
+    <script type="text/javascript">
+        $(document).ready(function () {
+            var socket = io.connect('http://127.0.0.1:8000');
+            socket.on('connect', function () {
+                socket.send('User has connected')
+            });
+
+            socket.on('message', function(m) {
+                $("#messages").append('<li>' + m + '</li>');
+            });
+
+            $('#send').on('click', function() {
+                socket.send($('#message').val());
+                $('#message').val('');
+            });
+
+        });
+    </script>
+    <ul id="messages"></ul>
+    <input type="text" id="message">
+    <button id="send">Send</button>
+</body>
+
+</html>
