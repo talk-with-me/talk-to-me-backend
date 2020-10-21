@@ -1,4 +1,5 @@
 from flask import Flask, render_template
+import db
 from flask_socketio import SocketIO, send
 
 app = Flask(__name__)
@@ -19,6 +20,13 @@ def handleMessage(m):
     print('Message: ' + m)
     # broadcast is set to true so that it's sent to all clients including yourself (so I can see it and the other person can see it)
     send(m, broadcast=True)
+
+# puts DATA into atlas
+@app.route('/inputData/<data>')
+def inputData(data):
+    db.db.collection.insert_one({"IP:": data})
+    return "Connected to mongodb atlas!"
+
 
 if __name__ == '__main__':
     #SocketIO takes the Flask app and wraps the SocketIO functionality around it
