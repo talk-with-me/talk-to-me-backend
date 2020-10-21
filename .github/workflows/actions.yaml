@@ -1,0 +1,9 @@
+name: actions_test
+on: [push]
+jobs:
+  check-bats-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: apt-get install python3.7
+      - run: python3.7 -V
