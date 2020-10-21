@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify, request
 import db
 from flask_socketio import SocketIO, send
 
@@ -26,6 +26,20 @@ def handleMessage(m):
 def inputData(data):
     db.db.collection.insert_one({"IP:": data})
     return "Connected to mongodb atlas!"
+
+# displays the collection inside the database, so query the db for its values
+@app.route('/findAll', methods=['GET'])
+def findAll():
+    query = db.db.collection.find() # 'collection' is the name of the collection in this db
+    output = {}
+    i = 0
+    for x in query:
+        output[i] = x
+        output[i].pop('_id')
+        i += 1
+
+    return jsonify(output)
+
 
 
 if __name__ == '__main__':
