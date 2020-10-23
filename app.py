@@ -1,5 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 import db
+import datetime
+import time
 from flask_socketio import SocketIO, send
 
 app = Flask(__name__)
@@ -24,7 +26,7 @@ def handleMessage(m):
 # puts DATA into atlas
 @app.route('/inputData/<data>')
 def inputData(data):
-    db.db.collection.insert_one({"IP:": data})
+    db.db.collection.insert_one({"ip": data, "queryType": 1, "time": datetime.datetime.utcnow()})
     return "Connected to mongodb atlas!"
 
 # displays the collection inside the database, so query the db for its values
@@ -37,8 +39,34 @@ def findAll():
         output[i] = x
         output[i].pop('_id')
         i += 1
+    return output
 
-    return jsonify(output)
+# i think this function should be running constantly in the background until there is no one in the queue
+# idk how you would make it to constantly run like that...
+# currently, doesn't pop users off the queue, so they stay there
+@app.route('/isQueueReady', methods=['GET'])
+def isQueueReady():
+    # count the number of people in the current queryType
+    # eventually replace 1 with whichever queryType user needs
+    count = db.db.collection.count_documents({"queryType": 1})
+    if(count >= 2):
+        # this should find the first two people in the queue
+        query = db.db.collection.find(
+                {"queryType": 1}, {"ip": 1, "_id": 0}).limit(2)
+        output = {}
+        ip = [] # store the first two ip here, currently not using it for anything
+        i = 0
+        for x in query:
+            output[i] = x
+            ip.append(x['ip'])
+            print(ip[i])
+            i += 1
+        return output # this should be returning the two ip addresses, instead of the dictinoary
+
+    # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
+    # if not enough in either, then continue waiting
+    else:
+        return "Not enough people..."
 
 
 
