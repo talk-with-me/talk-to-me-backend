@@ -1,11 +1,14 @@
 from flask import Flask, render_template, jsonify, request
+from flask_pymongo import PyMongo
+#import config
 import db
 import datetime
-import time
 from flask_socketio import SocketIO, send
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ttm'
+mdb = PyMongo(app, db.MONGO_URL).db 
+
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 @app.route('/')
@@ -23,22 +26,24 @@ def handleMessage(m):
     # broadcast is set to true so that it's sent to all clients including yourself (so I can see it and the other person can see it)
     send(m, broadcast=True)
 
-# puts DATA into atlas
-@app.route('/inputData/<data>')
-def inputData(data):
-    db.db.collection.insert_one({"ip": data, "queryType": 1, "time": datetime.datetime.utcnow()})
-    return "Connected to mongodb atlas!"
+# input user data the moment they join into the website
+@app.route('/inputData')
+def inputData():
+    mdb.userDetails.insert_one({"ip": request.remote_addr, "clientID": "some clientID", "secret": "some secret",  
+                                "queryType": 0, "time": datetime.datetime.utcnow()})
+    return "Inserted into user collection!"
 
 # displays the collection inside the database, so query the db for its values
 @app.route('/findAll', methods=['GET'])
 def findAll():
-    query = db.db.collection.find() # 'collection' is the name of the collection in this db
+    query = mdb.userDetails.find() # 'collection' is the name of the collection in this db
     output = {}
     i = 0
     for x in query:
         output[i] = x
         output[i].pop('_id')
         i += 1
+
     return output
 
 # i think this function should be running constantly in the background until there is no one in the queue
@@ -48,10 +53,10 @@ def findAll():
 def isQueueReady():
     # count the number of people in the current queryType
     # eventually replace 1 with whichever queryType user needs
-    count = db.db.collection.count_documents({"queryType": 1})
+    count = mdb.userDetails.count_documents({"queryType": 1})
     if(count >= 2):
         # this should find the first two people in the queue
-        query = db.db.collection.find(
+        query = mdb.userDetails.find(
                 {"queryType": 1}, {"ip": 1, "_id": 0}).limit(2)
         output = {}
         ip = [] # store the first two ip here, currently not using it for anything
