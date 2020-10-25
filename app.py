@@ -29,7 +29,7 @@ def handleMessage(m):
 # input user data the moment they join into the website
 @app.route('/inputData')
 def inputData():
-    mdb.userDetails.insert_one({"ip": request.remote_addr, "clientID": "some clientID", "secret": "some secret",  
+    mdb.userDetails.insert_one({"ip": request.remote_addr, "clientID": "some clientID", "secret": 123,  
                                 "queryType": 0, "time": datetime.datetime.utcnow()})
     return "Inserted into user collection!"
 
@@ -46,8 +46,20 @@ def findAll():
 
     return output
 
-# i think this function should be running constantly in the background until there is no one in the queue
-# idk how you would make it to constantly run like that...
+# finds a specfic row using their secret
+# find_one() - if query matches, first document is returned, otherwise null.
+# find() - nomatter number of documents matched, a cursor is returned, never null.
+# FYI: there is also a find_one_and_update function if needed.
+@app.route('/find/<int:secret>', methods=['GET'])
+def find(secret):
+    query = mdb.userDetails.find_one({"secret": secret}, {"_id": 0}) # ignore _id since its ObjectID, won't display otherwise
+    return query
+
+# update syntax
+# @app.route('/update/<secret>')
+# def update(secret):
+#     mdb.uesrDetails.update_one({"secret": secret}, {"$set": {"WHATEVER_FIELD": "NEW_VALUE" }})
+
 # currently, doesn't pop users off the queue, so they stay there
 @app.route('/isQueueReady', methods=['GET'])
 def isQueueReady():
