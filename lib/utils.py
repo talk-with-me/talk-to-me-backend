@@ -12,12 +12,12 @@ import functools
 import json
 
 from bson import ObjectId
-from bson.json_util import dumps
 from flask import Response, request
 
 
-def jsonify(data, status=200):
-    return Response(dumps(data), status=status, mimetype="application/json")
+def clean_json(data):
+    """Ensures all data types are clean in a dict."""
+    return json.loads(json.dumps(data, cls=HelperEncoder))
 
 
 class HelperEncoder(json.JSONEncoder):
