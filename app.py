@@ -3,13 +3,12 @@ from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
 #import config
 import db, json, datetime, random
+from bson import json_util, ObjectId
 
 # Configure app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ttm'
 mdb = PyMongo(app, db.MONGO_URL).db 
-userID = ""
-secret = 0
 
 # INSERT ROOM DB
 
@@ -28,12 +27,12 @@ def landingPage():
 # assign users a generated userID and secret. Stores user in db then redirects to queue selection
 @app.route('/auth', methods = ['GET'])
 def userAuth():
+    global userSecret
     userID = "user" + str(random.randint(0, 1000))
     userSecret = random.randint(1000000000, 20000000000)
-    user_obj = {"ip": request.remote_addr, "clientID": userID, "secret": userSecret, "queueType": 0, "time": datetime.datetime.utcnow()}
-    # mdb.userDetails.insert_one(user_obj)
+    user_obj = {"ip": request.remote_addr, "userID": userID, "_id": userSecret, "queueType": 0, "time": datetime.datetime.utcnow()}
+    mdb.userDetails.insert_one(user_obj)
     return user_obj
-
 
 # displays the collection inside the database, so query the db for its values
 @app.route('/findAll', methods=['GET'])
@@ -76,24 +75,27 @@ def isQueueReady():
         return "Not enough people..."
 
 # This would be where the user can choose what type of queue they want to be put in
-@app.route('/<user_ID>/select', methods = ['POST'])
-def selectQueue(user_ID): # this is actually the 'landing page' since this is the first page users will actually see
-    # print(findAll())
-    user_ID = userID
-    return render_template('queueSelection.html') # formally was index.html, but different name will help differentiate between chat html and queue page html
+@app.route('/select', methods = ['POST'])
+def selectQueue(): # this is actually the 'landing page' since this is the first page users will actually see
+    json_obj = request.json
+    if(mdb.userDetails.find_one(json_obj) != None):
+        return render_template('queueSelection.html') # formally was index.html, but different name will help differentiate between chat html and queue page html
+    return "ERROR - auth not passed"
 
 # When a selection is made, the user's respective fiels are updated in the db
-@app.route('/requestQueue', methods = ['POST'])
-def requestQueue(data):
-    user_object = mdb.userDetails.find(data['secret']) # SECRET AUTH
-    if (user_object != 0):
-        mdb.userDetails.findAndModify({query: { secret : data['secret'] }, sort: { cno: 1 },update: {{ queueType : 1}, {time : datetime.datetime.utcnow()}}}) # syntax needs updating
-        # return jsonify(user_object)
+@app.route('/queue', methods = ['POST'])
+def requestQueue():
+    json_obj = request.json
+    user_object = mdb.userDetails.find_one(json_obj) # SECRET AUTH
+    if (user_object != None):
+        mdb.userDetails.update_one(json_obj, {"$set": {"queueType": 1, "time": datetime.datetime.utcnow()}})
+        return mdb.userDetails.find_one(json_obj) 
+    return "ERROR"
 
 # I personally feel like having this as an event would be better than having it as it's own separate API endpoint
 @app.route('/roomID/userID', methods = ['POST'])
 def on_join(data):
-    user_object = mdb.userDetails.find(data['secret']) # SECRET AUTH
+    user_object = mdb.userDetails.findOne(data['_id']) # SECRET AUTH
     if (user_object != 0):
         room = data['room']
         join_room(room)
@@ -102,11 +104,12 @@ def on_join(data):
 
 @app.route('/roomID/userID', methods = ['DELETE'])
 def on_leave(data):
-    user_object = mdb.userDetails.find(data['secret']) # SECRET AUTH
+    user_object = mdb.userDetails.find(data['_id']) # SECRET AUTH
     if (user_object != 0):
         room = data['room']
         leave_room(data['room'], data['username'])
         send(userID + ' has left the room.', room=room)
+        mdb.userDetails.delete({"_id": userSecret})
 
 # I believe this should also be handled as an event
 @app.route('/roomID/messages', methods = ["POST"])
