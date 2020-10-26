@@ -1,9 +1,13 @@
 from flask import Flask, render_template, jsonify, request
 from flask_pymongo import PyMongo
-#import config
 import db
 import datetime
 from flask_socketio import SocketIO, send
+import time
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import atexit
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ttm'
@@ -44,6 +48,7 @@ def findAll():
         output[i].pop('_id')
         i += 1
 
+    print(output)
     return output
 
 # finds a specfic row using their secret
@@ -55,35 +60,45 @@ def find(secret):
     query = mdb.userDetails.find_one({"secret": secret}, {"_id": 0}) # ignore _id since its ObjectID, won't display otherwise
     return query
 
-# update syntax
-# @app.route('/update/<secret>')
-# def update(secret):
-#     mdb.uesrDetails.update_one({"secret": secret}, {"$set": {"WHATEVER_FIELD": "NEW_VALUE" }})
-
 # currently, doesn't pop users off the queue, so they stay there
 @app.route('/isQueueReady', methods=['GET'])
 def isQueueReady():
     # count the number of people in the current queryType
     # eventually replace 1 with whichever queryType user needs
-    count = mdb.userDetails.count_documents({"queryType": 1})
+    count = mdb.userDetails.count_documents({"queueType": "idle"})
     if(count >= 2):
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
-                {"queryType": 1}, {"ip": 1, "_id": 0}).limit(2)
+                {"queueType": "idle"}, {"ip": 1, "secret": 1, "_id": 0}).limit(2)
         output = {}
         ip = [] # store the first two ip here, currently not using it for anything
         i = 0
         for x in query:
             output[i] = x
             ip.append(x['ip'])
-            print(ip[i])
+           # print(ip[i])
             i += 1
-        return output # this should be returning the two ip addresses, instead of the dictinoary
+
+        print(output)
+        return output
 
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
     # if not enough in either, then continue waiting
     else:
+        print("no one")
         return "Not enough people..."
+
+# create schedule for printing time
+scheduler = BackgroundScheduler()
+scheduler.start()
+scheduler.add_job(
+    func=isQueueReady,
+    trigger=IntervalTrigger(seconds=2),
+    id='printing_all',
+    name='Print all every 2 seconds',
+    replace_existing=True)
+# Shut down the scheduler when exiting the app
+atexit.register(lambda: scheduler.shutdown())
 
 
 
@@ -95,3 +110,4 @@ if __name__ == '__main__':
     #SocketIO is more real-time, so the extra functionality is built around this standard Flask app functionality
     #In other words, SocketIO is a specialized add-on to the Flask app functionality for real-time functionality
     socketio.run(app, port=8000)
+
