@@ -30,7 +30,7 @@ def userAuth():
     global userSecret
     userID = "user" + str(random.randint(0, 1000))
     userSecret = random.randint(1000000000, 20000000000)
-    user_obj = {"ip": request.remote_addr, "userID": userID, "_id": userSecret, "queueType": 0, "time": datetime.datetime.utcnow()}
+    user_obj = {"ip": request.remote_addr, "userID": userID, "_id": userSecret, "queueType": 0, "time": datetime.datetime.utcnow(), "room": "lonely"}
     mdb.userDetails.insert_one(user_obj)
     return user_obj
 
@@ -78,7 +78,7 @@ def isQueueReady():
 @app.route('/select', methods = ['POST'])
 def selectQueue(): # this is actually the 'landing page' since this is the first page users will actually see
     json_obj = request.json
-    if(mdb.userDetails.find_one(json_obj) != None):
+    if(mdb.userDetails.find_one(json_obj['_id']) != None):
         return render_template('queueSelection.html') # formally was index.html, but different name will help differentiate between chat html and queue page html
     return "ERROR - auth not passed"
 
@@ -86,10 +86,11 @@ def selectQueue(): # this is actually the 'landing page' since this is the first
 @app.route('/queue', methods = ['POST'])
 def requestQueue():
     json_obj = request.json
-    user_object = mdb.userDetails.find_one(json_obj) # SECRET AUTH
+    user_object = mdb.userDetails.find_one(json_obj['_id']) # SECRET AUTH
     if (user_object != None):
-        mdb.userDetails.update_one(json_obj, {"$set": {"queueType": 1, "time": datetime.datetime.utcnow()}})
-        return mdb.userDetails.find_one(json_obj) 
+        print(user_object)
+        mdb.userDetails.update_one(user_object, {"$set": {"queueType": 1, "time": datetime.datetime.utcnow()}})
+        return render_template('chat.html')
     return "ERROR"
 
 # I personally feel like having this as an event would be better than having it as it's own separate API endpoint
@@ -112,11 +113,31 @@ def on_leave(data):
         mdb.userDetails.delete({"_id": userSecret})
 
 # I believe this should also be handled as an event
-@app.route('/roomID/messages', methods = ["POST"])
+@app.route('/messages', methods = ["POST"])
 def handleMessage(data):
+    json_obj = request.json
+    user_obj = mdb.userDetails.find_one(json_obj['_id'])
+    if(user_obj == None):
+        return 'Not authorized' # TODO when an unauthorized user tries to send a message
     print('Message: ' + data)
     # broadcast is set to true so that it's sent to all clients including yourself (so I can see it and the other person can see it)
-    send(data['message'], broadcast=True, room = data['room'])
+    emit(data['message'], room = user_obj['room'])
+
+# rest api endpoint to assign a room to a user (doesn't join)
+@app.route('/room', methods = ["POST"])
+def assign_room():
+    json_obj = request.json
+    user_obj = mdb.userDetails.find_one(json_obj['_id']) # get user from db
+    mdb.userDetails.update_one(user_obj, {"$set": {'room': json_obj['room'], "queueType": 2, "time": datetime.datetime.utcnow()}})
+    return ('room assigned ' + json_obj['room'])
+
+# socket event to have user actually join the room
+@socketio.on('join_room')
+def user_join_room(json_obj):
+    user_obj = mdb.userDetails.find_one(json_obj['_id']) # SECRET AUTH
+    print(user_obj['room'])
+    join_room(user_obj['room'])
+    print (user_obj['userID'] + ' has joined room ' + user_obj['room'])
 
 if __name__ == '__main__':
     socketio.run(app, port=8000, debug=True)
