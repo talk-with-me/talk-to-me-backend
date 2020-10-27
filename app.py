@@ -124,31 +124,6 @@ def isQueueReady():
         print("no one")
         return "Not enough people..."
 
-# create schedule for printing time
-scheduler = BackgroundScheduler()
-scheduler.start()
-scheduler.add_job(
-    func=isQueueReady,
-    trigger=IntervalTrigger(seconds=2),
-    id='printing_all',
-    name='Print all every 2 seconds',
-    replace_existing=True)
-# Shut down the scheduler when exiting the app
-atexit.register(lambda: scheduler.shutdown())
-
-
-# APScheduler running in background 
-scheduler = BackgroundScheduler()
-scheduler.start()
-scheduler.add_job(
-    func=isQueueReady,
-    trigger=IntervalTrigger(seconds=2),
-    id='check_is_queue_ready',
-    name='Check queue statsu every 2 seconds',
-    replace_existing=True)
-# Shut down the scheduler when exiting the app
-atexit.register(lambda: scheduler.shutdown())
-
 # APScheduler running in background 
 scheduler = BackgroundScheduler()
 scheduler.start()
