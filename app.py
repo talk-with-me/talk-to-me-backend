@@ -9,6 +9,10 @@ from lib import errors
 # Configure app
 from lib.utils import error, expect_json, success
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import atexit
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ttm'
 mdb = PyMongo(app, db.MONGO_URL).db
@@ -97,31 +101,28 @@ def notify_queue_complete():
 errors.register_error_handlers(app)
 
 # ===== DEV ONLY ====
-# i think this function should be running constantly in the background until there is no one in the queue
-# idk how you would make it to constantly run like that...
 # currently, doesn't pop users off the queue, so they stay there
 @app.route('/isQueueReady', methods=['GET'])
 def isQueueReady():
     # count the number of people in the current queryType
     # eventually replace 1 with whichever queryType user needs
-    count = mdb.userDetails.count_documents({"queryType": 1})
+    count = mdb.userDetails.count_documents({"queueType": "idle"})
     if(count >= 2):
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
-                {"queryType": 1}, {"ip": 1, "_id": 0}).limit(2)
+                {"queueType": "idle"}, {"userID": 1, "_id": 0}).limit(2)
         output = {}
-        ip = [] # store the first two ip here, currently not using it for anything
         i = 0
         for x in query:
             output[i] = x
-            ip.append(x['ip'])
-            print(ip[i])
             i += 1
+        print(output)
         return output # this should be returning the two ip addresses, instead of the dictinoary
 
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
     # if not enough in either, then continue waiting
     else:
+        print("no one :(")
         return "Not enough people..."
 
 # rest api endpoint to assign a room to a user (doesn't join) TODO: make this a scheduled event running on backend
@@ -134,16 +135,16 @@ def assign_room():
 
 
 # APScheduler running in background 
-scheduler = BackgroundScheduler()
-scheduler.start()
-scheduler.add_job(
-    func=isQueueReady,
-    trigger=IntervalTrigger(seconds=2),
-    id='check_is_queue_ready',
-    name='Check queue statsu every 2 seconds',
-    replace_existing=True)
-# Shut down the scheduler when exiting the app
-atexit.register(lambda: scheduler.shutdown())
+# scheduler = BackgroundScheduler()
+# scheduler.start()
+# scheduler.add_job(
+#     func=isQueueReady,
+#     trigger=IntervalTrigger(seconds=2),
+#     id='check_is_queue_ready',
+#     name='Check queue status every 2 seconds',
+#     replace_existing=True)
+# # Shut down the scheduler when exiting the app
+# atexit.register(lambda: scheduler.shutdown())
 
 
 if __name__ == '__main__':
