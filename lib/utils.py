@@ -85,7 +85,8 @@ def expect_json(*, strict=False, optional=None, **fields):
 
             # ensure fields are present
             if strict:
-                if not ((required := set(fields).difference(optional)).issubset(body) and set(fields).issuperset(body)):
+                required = set(fields).difference(optional) 
+                if not (required.issubset(body) and set(fields).issuperset(body)):
                     return error(400, f"invalid body fields: expected {list(required)}, got {list(body)}")
             else:
                 if not set(fields).difference(optional).issubset(body):
