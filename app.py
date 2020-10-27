@@ -65,6 +65,43 @@ def handleMessage(jsonObj):
     socketio.emit('send_message_to_client', message ,room = room_id)
     return success(message, 201)
 
+# Helper method for /room endpoint - if no rooms are open, create a new room in the db and set user1 to the current user
+# if there is an open room, add the current user to that room and close the room
+# I have concerns about what happens if multiple users do this at the same time
+def match_making(userObj):
+    if (mdb.rooms.find_one({"isFilled" : "No"}) == None): # no open rooms
+        # TODO what do we do when the user is waiting for someone
+        mdb.rooms.insert_one({"room" : userObj['userID'], "isFilled" : "No", 'user1' : userObj['userID'], 'user2' : "None"})
+        mdb.userDetails.update_one(userObj, {"$set": {'room': userObj['userID']}}) # still in queue
+        print("user has created room " + userObj['userID'])
+    else:
+        room_json_obj = mdb.rooms.find_one({"isFilled" : "No"})
+        mdb.userDetails.update_one(userObj, {"$set": {'room': room_json_obj['room'], "queueType": "outQueue"}})
+        # find person who first created the room
+        mdb.userDetails.update_one({'room': room_json_obj['room'], 'queueType': 'inQueue'}, {"$set": {'queueType': 'outQueue'}})
+        mdb.rooms.update_one({'room': room_json_obj['room']}, {"$set": {"isFilled" : "Yes", "user2" : userObj['userID']}})
+        print("user has joined room " + room_json_obj['room'])
+        # would it be possible to return both of these users so that they can both join_room??
+
+# Assigns rooms to users and updates room db
+@app.route('/room', methods = ["POST"])
+@expect_json(secret=str)
+def assign_room(body):
+    userObj = mdb.userDetails.find_one({"secret": body['secret']}) # get user from db
+    match_making(userObj)
+    newUserObj = mdb.userDetails.find_one({"secret": body['secret']})
+    return ('room assigned ' + newUserObj['room'])
+
+# What would follow is an event scheduler where we need to check the room db constantly for rooms that are filled.
+# If they are filled, emit the join_room event for both of those users. All the info we need should be
+# in the room JSON object. (I'm assuming BackgroundScheduler also works for events)
+#
+# We have two options:
+# 1) Refactor user_join_room in such a way where it takes in the room JSON object and then does join_room on user1 and user2
+# 2) Emit user_join_room twice - although in that case, I'll need to change the userID fields in the room db to instead be the user secrets
+#
+# Either way should hopefully work - these are just my ideas
+
 # ====== SOCKET STUFF =====
 # socket event to have user actually join the room
 @socketio.on('join_room')
@@ -134,15 +171,6 @@ def isQueueReady():
     else:
         print("no one")
         return "no one"
-
-
-# rest api endpoint to assign a room to a user (doesn't join) TODO: make this a scheduled event running on backend
-@app.route('/room', methods = ["POST"])
-def assign_room():
-    jsonObj = request.json
-    userObj = mdb.userDetails.find_one(jsonObj['_id']) # get user from db
-    mdb.userDetails.update_one(userObj, {"$set": {'room': jsonObj['room'], "queueType": 2, "time": datetime.datetime.utcnow()}})
-    return ('room assigned ' + jsonObj['room'])
 
 # deletes all documents in UserDetails
 @app.route('/deleteUserDetails')
