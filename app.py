@@ -95,12 +95,6 @@ def assign_room(body):
 # What would follow is an event scheduler where we need to check the room db constantly for rooms that are filled.
 # If they are filled, emit the join_room event for both of those users. All the info we need should be
 # in the room JSON object. (I'm assuming BackgroundScheduler also works for events)
-#
-# We have two options:
-# 1) Refactor user_join_room in such a way where it takes in the room JSON object and then does join_room on user1 and user2
-# 2) Emit user_join_room twice - although in that case, I'll need to change the userID fields in the room db to instead be the user secrets
-#
-# Either way should hopefully work - these are just my ideas
 
 # ====== SOCKET STUFF =====
 # socket event to have user actually join the room
