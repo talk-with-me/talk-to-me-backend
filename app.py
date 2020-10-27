@@ -65,36 +65,14 @@ def handleMessage(jsonObj):
     socketio.emit('send_message_to_client', message ,room = room_id)
     return success(message, 201)
 
-# Helper method for /room endpoint - if no rooms are open, create a new room in the db and set user1 to the current user
-# if there is an open room, add the current user to that room and close the room
-# I have concerns about what happens if multiple users do this at the same time
-def match_making(userObj):
-    if (mdb.rooms.find_one({"isFilled" : "No"}) == None): # no open rooms
-        # TODO what do we do when the user is waiting for someone
-        mdb.rooms.insert_one({"room" : userObj['userID'], "isFilled" : "No", 'user1' : userObj['userID'], 'user2' : "None"})
-        mdb.userDetails.update_one(userObj, {"$set": {'room': userObj['userID']}}) # still in queue
-        print("user has created room " + userObj['userID'])
-    else:
-        room_json_obj = mdb.rooms.find_one({"isFilled" : "No"})
-        mdb.userDetails.update_one(userObj, {"$set": {'room': room_json_obj['room'], "queueType": "outQueue"}})
-        # find person who first created the room
-        mdb.userDetails.update_one({'room': room_json_obj['room'], 'queueType': 'inQueue'}, {"$set": {'queueType': 'outQueue'}})
-        mdb.rooms.update_one({'room': room_json_obj['room']}, {"$set": {"isFilled" : "Yes", "user2" : userObj['userID']}})
-        print("user has joined room " + room_json_obj['room'])
-        # would it be possible to return both of these users so that they can both join_room??
-
-# Assigns rooms to users and updates room db
-@app.route('/room', methods = ["POST"])
-@expect_json(secret=str)
-def assign_room(body):
-    userObj = mdb.userDetails.find_one({"secret": body['secret']}) # get user from db
-    match_making(userObj)
-    newUserObj = mdb.userDetails.find_one({"secret": body['secret']})
-    return ('room assigned ' + newUserObj['room'])
-
-# What would follow is an event scheduler where we need to check the room db constantly for rooms that are filled.
-# If they are filled, emit the join_room event for both of those users. All the info we need should be
-# in the room JSON object. (I'm assuming BackgroundScheduler also works for events)
+# # Assigns rooms to users and updates room db
+# @app.route('/room', methods = ["POST"])
+# @expect_json(secret=str)
+# def assign_room(body):
+#     userObj = mdb.userDetails.find_one({"secret": body['secret']}) # get user from db
+#     match_making(userObj)
+#     newUserObj = mdb.userDetails.find_one({"secret": body['secret']})
+#     return ('room assigned ' + newUserObj['room'])
 
 # ====== SOCKET STUFF =====
 # socket event to have user actually join the room
@@ -125,39 +103,43 @@ def user_disconnect():
     pass
 
 # ===== MISC =====
-def notify_queue_complete():
-    socketio.emit("queue_complete", {'user_id': 'blah'})
-
-
 # register handlers and stuff
 errors.register_error_handlers(app)
 
 # ===== DEV ONLY ====
 # currently, doesn't pop users off the queue, so they stay there
 
-def queue_is_complete(user_id):
-    print("userID 1 is: ", user_id[0], " userID 2 is: ", user_id[1])
+def notify_queue_complete(user_id):
+    socketio.emit("queue_complete", {'user_id' : user_id[0]})
+    socketio.emit("queue_complete", {'user_id' : user_id[1]})
+
+def match_making(userIDs):
+    roomID = str(uuid.uuid4())
+    user_ID1 = userIDs[0]
+    user_ID2 = userIDs[1]
+    mdb.rooms.insert_one({"room" : roomID, 'user1' : user_ID1, 'user2' : user_ID2})
+    mdb.userDetails.update_one({"userID" : user_ID1}, {"$set": {'room': roomID, "queueType": "outQueue"}})
+    mdb.userDetails.update_one({"userID" : user_ID2}, {"$set": {'room': roomID, "queueType": "outQueue"}})
+    print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID)
 
 @app.route('/isQueueReady', methods=['GET'])
 #@app.before_first_request
 def isQueueReady():
-    # count the number of people in the current queryType
+    # count the number of people in the current queueType inQueue
     # eventually replace 1 with whichever queueType user needs
-    count = mdb.userDetails.count_documents({"queueType": "idle"})
+    count = mdb.userDetails.count_documents({"queueType": "inQueue"})
     if(count >= 2):
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
-                {"queueType": "idle"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
+                {"queueType": "inQueue"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
         output = {}
-        user_id = []
+        userIDs = []
         i = 0
         for x in query:
             output[i] = x
-            user_id.append(x['userID'])
-            # this will change the matched users' queueType to 'talking', no longer idle
-            #mdb.userDetails.update_one(x, {"$set": {'queueType': "talking"}})
-            i += 1
-        queue_is_complete(user_id) # pass user_id into notify_queue_complete()
+            userIDs.append(x['userID'])
+        match_making(userIDs)
+        notify_queue_complete(userIDs) # pass user_id into notify_queue_complete()
         return output
 
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
