@@ -12,6 +12,7 @@ from lib.utils import error, expect_json, success
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import atexit
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ttm'
@@ -102,28 +103,38 @@ errors.register_error_handlers(app)
 
 # ===== DEV ONLY ====
 # currently, doesn't pop users off the queue, so they stay there
+
+def queue_is_complete(user_id):
+    print("userID 1 is: ", user_id[0], " userID 2 is: ", user_id[1])
+
 @app.route('/isQueueReady', methods=['GET'])
+#@app.before_first_request
 def isQueueReady():
     # count the number of people in the current queryType
-    # eventually replace 1 with whichever queryType user needs
+    # eventually replace 1 with whichever queueType user needs
     count = mdb.userDetails.count_documents({"queueType": "idle"})
     if(count >= 2):
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
-                {"queueType": "idle"}, {"userID": 1, "_id": 0}).limit(2)
+                {"queueType": "idle"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
         output = {}
+        user_id = []
         i = 0
         for x in query:
             output[i] = x
+            user_id.append(x['userID'])
+            # this will change the matched users' queueType to 'talking', no longer idle
+            #mdb.userDetails.update_one(x, {"$set": {'queueType': "talking"}})
             i += 1
-        print(output)
-        return output # this should be returning the two ip addresses, instead of the dictinoary
+        queue_is_complete(user_id) # pass user_id into notify_queue_complete()
+        return output
 
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
     # if not enough in either, then continue waiting
     else:
-        print("no one :(")
-        return "Not enough people..."
+        print("no one")
+        return "no one"
+
 
 # rest api endpoint to assign a room to a user (doesn't join) TODO: make this a scheduled event running on backend
 @app.route('/room', methods = ["POST"])
@@ -133,18 +144,24 @@ def assign_room():
     mdb.userDetails.update_one(userObj, {"$set": {'room': jsonObj['room'], "queueType": 2, "time": datetime.datetime.utcnow()}})
     return ('room assigned ' + jsonObj['room'])
 
+# deletes all documents in UserDetails
+@app.route('/deleteUserDetails')
+def delete_user_details():
+    mdb.userDetails.delete_many({})
+    return "deleted all docs in userDetails"
+
 
 # APScheduler running in background 
-# scheduler = BackgroundScheduler()
-# scheduler.start()
-# scheduler.add_job(
-#     func=isQueueReady,
-#     trigger=IntervalTrigger(seconds=2),
-#     id='check_is_queue_ready',
-#     name='Check queue status every 2 seconds',
-#     replace_existing=True)
-# # Shut down the scheduler when exiting the app
-# atexit.register(lambda: scheduler.shutdown())
+scheduler = BackgroundScheduler()
+scheduler.start()
+scheduler.add_job(
+    func=isQueueReady,
+    trigger=IntervalTrigger(seconds=4),
+    id='check_is_queue_ready',
+    name='Check queue status every 2 seconds',
+    replace_existing=True)
+# Shut down the scheduler when exiting the app
+atexit.register(lambda: scheduler.shutdown())
 
 
 if __name__ == '__main__':
