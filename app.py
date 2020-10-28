@@ -16,10 +16,8 @@ import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ttm'
+CORS(app)
 mdb = PyMongo(app, db.MONGO_URL).db
-
-# INSERT ROOM DB
-
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 # ===== REST =====
