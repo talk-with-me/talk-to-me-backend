@@ -1,4 +1,5 @@
 from flask import Flask, render_template, redirect, url_for, jsonify, request, Response
+from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
 #import config
