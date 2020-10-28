@@ -8,7 +8,7 @@ from bson import json_util, ObjectId
 from lib import errors
 
 # Configure app
-from lib.utils import error, expect_json, success
+from lib.utils import clean_json, error, expect_json, success
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -61,7 +61,7 @@ def handleMessage(jsonObj):
         "content": jsonObj['message']
     }
     mdb.messages.insert_one(message)
-    socketio.emit('send_message_to_client', message ,room = room_id)
+    socketio.emit('send_message_to_client', clean_json(message) ,room = room_id)
     return success(message, 201)
 
 # # Assigns rooms to users and updates room db
