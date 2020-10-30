@@ -73,6 +73,12 @@ def handleMessage(jsonObj):
 #     newUserObj = mdb.userDetails.find_one({"secret": body['secret']})
 #     return ('room assigned ' + newUserObj['room'])
 
+
+def delete_user_from_db(userObj):
+    mdb.userDetails.delete_one({'secret': userObj['secret']})
+    mdb.messages.delete_many({'author': userObj['userID']}) # can proablby do by roomID
+    mdb.rooms.delete_one({'room': userObj['room']})
+
 # ====== SOCKET STUFF =====
 # socket event to have user actually join the room
 @socketio.on('join_room')
@@ -94,6 +100,8 @@ def user_leave_room(secret):
         return
     # todo whatever teardown you need
     socketio.emit('user_disconnected', room=userObj['room'])
+    # delete these 2 users from messages, rooms, and queue
+    delete_user_from_db(userObj)
     print(userObj['userID'] + ' has left room ' + userObj['room'])
 
 @socketio.on('disconnect')
@@ -117,6 +125,9 @@ def match_making(userIDs):
     user_ID1 = userIDs[0]
     user_ID2 = userIDs[1]
     mdb.rooms.insert_one({"room" : roomID, 'user1' : user_ID1, 'user2' : user_ID2})
+
+    # why not just delete them from the queue? instead of updating them
+    # unless we plan on having the user keep their secret until they close the tab
     mdb.userDetails.update_one({"userID" : user_ID1}, {"$set": {'room': roomID, "queueType": "outQueue"}})
     mdb.userDetails.update_one({"userID" : user_ID2}, {"$set": {'room': roomID, "queueType": "outQueue"}})
     print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID)
@@ -147,12 +158,29 @@ def isQueueReady():
         print("no one")
         return "no one"
 
+# ---------------------MAKE SURE TO REMOVE THESE ON RELEASE-----------------------------
 # deletes all documents in UserDetails
 @app.route('/deleteUserDetails')
 def delete_user_details():
     mdb.userDetails.delete_many({})
     return "deleted all docs in userDetails"
 
+@app.route('/deleteRoomDetails')
+def delete_room_details():
+    mdb.rooms.delete_many({})
+    return "deleted all docs in rooms"
+
+@app.route('/deleteMessageDetails')
+def delete_message_details():
+    mdb.messages.delete_many({})
+    return "deleted all docs in messages"
+
+@app.route('/deleteAllDetails')
+def delete_all_details():
+    mdb.userDetails.delete_many({})
+    mdb.rooms.delete_many({})
+    mdb.messages.delete_many({})
+    return "all gone!"
 
 # APScheduler running in background 
 scheduler = BackgroundScheduler()
@@ -161,7 +189,7 @@ scheduler.add_job(
     func=isQueueReady,
     trigger=IntervalTrigger(seconds=4),
     id='check_is_queue_ready',
-    name='Check queue status every 2 seconds',
+    name='Check queue status every 4 seconds',
     replace_existing=True)
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
