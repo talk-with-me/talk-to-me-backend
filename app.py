@@ -64,16 +64,6 @@ def handleMessage(jsonObj):
     socketio.emit('send_message_to_client', clean_json(message) ,room = room_id)
     return success(message, 201)
 
-# # Assigns rooms to users and updates room db
-# @app.route('/room', methods = ["POST"])
-# @expect_json(secret=str)
-# def assign_room(body):
-#     userObj = mdb.userDetails.find_one({"secret": body['secret']}) # get user from db
-#     match_making(userObj)
-#     newUserObj = mdb.userDetails.find_one({"secret": body['secret']})
-#     return ('room assigned ' + newUserObj['room'])
-
-
 def delete_user_from_db(userObj):
     mdb.userDetails.delete_one({'secret': userObj['secret']})
     mdb.messages.delete_many({'author': userObj['userID']}) # can proablby do by roomID
@@ -125,12 +115,7 @@ def match_making(userIDs):
     user_ID1 = userIDs[0]
     user_ID2 = userIDs[1]
     mdb.rooms.insert_one({"room" : roomID, 'user1' : user_ID1, 'user2' : user_ID2})
-
-    # why not just delete them from the queue? instead of updating them
-    # unless we plan on having the user keep their secret until they close the tab
-    mdb.userDetails.update_one({"userID" : user_ID1}, {"$set": {'room': roomID, "queueType": "outQueue"}})
-    mdb.userDetails.update_one({"userID" : user_ID2}, {"$set": {'room': roomID, "queueType": "outQueue"}})
-    print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID)
+    print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID + " and have been removed from the db")
 
 @app.route('/isQueueReady', methods=['GET'])
 #@app.before_first_request
@@ -150,12 +135,13 @@ def isQueueReady():
             userIDs.append(x['userID'])
         match_making(userIDs)
         notify_queue_complete(userIDs) # pass user_id into notify_queue_complete()
+        mdb.userDetails.delete_one({"userID" : userIDs[0]})
+        mdb.userDetails.delete_one({"userID" : userIDs[1]})
         return output
 
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
     # if not enough in either, then continue waiting
     else:
-        print("no one")
         return "no one"
 
 # ---------------------MAKE SURE TO REMOVE THESE ON RELEASE-----------------------------
