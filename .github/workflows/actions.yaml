@@ -4,7 +4,8 @@ jobs:
   main_test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - run: sudo apt-get install -y python3.7 python3-pip
-      - run: pip3 install -r requirements.txt
-      - run: python3.7 app.py
+      - name: copy stuff from repo to worker directory
+        uses: actions/checkout@v1
+      - name: start the docker container
+        uses: ./
+        id: talk-to-me backend
