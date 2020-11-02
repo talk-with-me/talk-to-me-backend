@@ -27,7 +27,10 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 def userAuth():
     userID = str(uuid.uuid4())
     userSecret = str(uuid.uuid4())
-    userObj = {"ip": request.remote_addr, "userID": userID, "secret": userSecret, "queueType": "idle", "time": datetime.datetime.utcnow(), "room": "lonely"}
+    userObj = {
+        "ip": request.remote_addr, "userID": userID, "secret": userSecret, "queueType": "idle",
+        "time": datetime.datetime.utcnow(), "room": "lonely", "sid": None
+    }
     mdb.userDetails.insert_one(userObj)
     return success(userObj)
 
@@ -94,10 +97,33 @@ def user_leave_room(secret):
     delete_user_from_db(userObj)
     print(userObj['userID'] + ' has left room ' + userObj['room'])
 
+@socketio.on('hello')
+def user_sid_assoc(secret):
+    """
+    Associates a SocketIO session ID with a user object. This is called immediately after the user auths.
+    """
+    user = mdb.userDetails.find_one({'secret': secret})  # fetch user from db
+    if user is None:
+        print("user_sid_assoc: user not found")
+        return
+    # noinspection PyUnresolvedReferences
+    # provided by socketio
+    sid = request.sid
+    mdb.userDetails.update_one({'secret': secret}, {"$set": {"sid": sid}})
+    print(f"User {user['userID']} has socket session ID {sid}")
+
 @socketio.on('disconnect')
 def user_disconnect():
-    # todo
-    pass
+    # this code was copied from leave_room - modify as needed
+    # noinspection PyUnresolvedReferences
+    userObj = mdb.userDetails.find_one({'sid': request.sid})  # fetch user from db
+    if userObj is None:
+        print("user disconnected from socket but we don't know them")
+        return
+    socketio.emit('user_disconnected', room=userObj['room'])
+    # delete these 2 users from messages, rooms, and queue
+    delete_user_from_db(userObj)
+    print(userObj['userID'] + ' has left room ' + userObj['room'])
 
 # ===== MISC =====
 # register handlers and stuff
@@ -168,7 +194,7 @@ def delete_all_details():
     mdb.messages.delete_many({})
     return "all gone!"
 
-# APScheduler running in background 
+# APScheduler running in background
 scheduler = BackgroundScheduler()
 scheduler.start()
 scheduler.add_job(
