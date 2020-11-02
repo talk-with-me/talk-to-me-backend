@@ -1,9 +1,10 @@
-name: actions_test
+name: test
 on: [push]
 jobs:
-  test_python_version:
+  main_test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - run: sudo apt-get install python3.7
-      - run: python3.7 -V
+      - run: sudo apt-get install -y python3.7 python3-pip
+      - run: pip3 install flask flask-pymongo flask-cors flask-socketio apscheduler
+      - run: python3.7 app.py
