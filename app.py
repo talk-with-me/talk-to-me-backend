@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
 #import config
-import db, json, datetime, random, uuid
+import db, json, datetime, random, uuid, atexit
 from bson import json_util, ObjectId
 from lib import errors
 
@@ -34,12 +34,26 @@ def userAuth():
 # When a selection is made, the user's respective fiels are updated in the db
 @app.route('/queue', methods = ['POST'])
 @expect_json(secret=str)
-def requestQueue(body):
+def requestQueue(body): # body will now also contain a queueType field
     userObject = mdb.userDetails.find_one({"secret": body['secret']}) # Fetches user from db
     if (userObject != None): # TODO: return different response if user is already in queue or in a room
+        # if(userObject['queueType'] != "idle" or userObject['room'] != "lonely"):
+        #     return error(403, "nah you already in queue or in a room")
         mdb.userDetails.update_one({"secret": body['secret']},
                                    {"$set": {"queueType": "inQueue", "time": datetime.datetime.utcnow()}})
-        return success("yay, you are in queue now", 200)
+        return success("yay, you are in queue now")
+        # mdb.userDetails.update_one({"secret": body['secret']},
+        #                            {"$set": {"queueType": body['queueType'], "time": datetime.datetime.utcnow()}})
+        # if(body['queueType'] == "Listen"):
+        #     mdb.Listen.insert_one(userObject)
+        #     maybe also remove them from userDetails
+        #     return success("yay, you are in the Listen queue")
+        # if(body['queueType'] == "Be Heard"):
+        #     mdb.Listen.insert_one(userObject)
+        #     return success("yay, you are in the Be Heard queue")
+        # if(body['queueType'] == "Talk"):
+        #     mdb.Listen.insert_one(userObject)
+        #     return success("yay, you are in the Talk queue")
     return error(403, "go do auth first you dummy")
 
 # sends message to all users connected to same room as sender
@@ -95,9 +109,21 @@ def user_leave_room(secret):
     print(userObj['userID'] + ' has left room ' + userObj['room'])
 
 @socketio.on('disconnect')
-def user_disconnect():
-    # todo
+def user_disconnect(): # this would take in secret
     pass
+   # if they were already in a room - do not have to worry about taking them out of queue since they're already out
+    # userObj = mdb.userDetails.find_one({'secret': secret})  # fetch user from db
+    # if userObj is None:
+    #     print("bad user not found")
+    #     return
+    # if(userObj['room'] == "lonely" and userObj['queueType'] == "idle"):
+    #     # they weren't in a room yet or in queue yet
+    #     mdb.userDetails.remove({"secret": secret})
+    #     return
+    # elif (userObj['queueType'] != "idle" and userObj['room'] == "lonely"): # they were in queue and not in a room yet
+    #     
+    #     return
+
 
 # ===== MISC =====
 # register handlers and stuff
@@ -115,7 +141,9 @@ def match_making(userIDs):
     user_ID1 = userIDs[0]
     user_ID2 = userIDs[1]
     mdb.rooms.insert_one({"room" : roomID, 'user1' : user_ID1, 'user2' : user_ID2})
-    print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID + " and have been removed from the db")
+    mdb.userDetails.update_one({"userID" : user_ID1}, {"$set": {'room': roomID, "queueType": "outQueue"}})
+    mdb.userDetails.update_one({"userID" : user_ID2}, {"$set": {'room': roomID, "queueType": "outQueue"}})
+    print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID)
 
 @app.route('/isQueueReady', methods=['GET'])
 #@app.before_first_request
@@ -127,17 +155,12 @@ def isQueueReady():
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
                 {"queueType": "inQueue"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
-        output = {}
         userIDs = []
-        i = 0
         for x in query:
-            output[i] = x
             userIDs.append(x['userID'])
         match_making(userIDs)
         notify_queue_complete(userIDs) # pass user_id into notify_queue_complete()
-        mdb.userDetails.delete_one({"userID" : userIDs[0]})
-        mdb.userDetails.delete_one({"userID" : userIDs[1]})
-        return output
+        return "checked"
 
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
     # if not enough in either, then continue waiting
@@ -169,17 +192,19 @@ def delete_all_details():
     return "all gone!"
 
 # APScheduler running in background 
+# Ideally this will check all 3 databases regularly
 scheduler = BackgroundScheduler()
-scheduler.start()
 scheduler.add_job(
     func=isQueueReady,
-    trigger=IntervalTrigger(seconds=4),
+    trigger="interval", 
+    seconds=3,
     id='check_is_queue_ready',
-    name='Check queue status every 4 seconds',
+    name='Check queue status every 3 seconds',
     replace_existing=True)
+scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
 
 
 if __name__ == '__main__':
-    socketio.run(app, port=8000, debug=True)
+    socketio.run(app, port=8000)
