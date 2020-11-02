@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 name: test
 on: [push]
 jobs:
@@ -8,3 +9,14 @@ jobs:
       - run: sudo apt-get install -y python3.7 python3-pip
       - run: pip3 install flask flask-pymongo flask-cors flask-socketio apscheduler
       - run: python3.7 app.py
+=======
+name: actions_test
+on: [push]
+jobs:
+  test_python_version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: sudo apt-get install python3.7
+      - run: python3.7 -V
+>>>>>>> 6fdb125aa0bf9f37f9ab036927557edcd700e1f3
