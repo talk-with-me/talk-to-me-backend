@@ -1,5 +1,5 @@
 # Use Debian buster as OS environment
-FROM debian:10.6
+FROM python:3.7-buster
 
 # Copy over stuff
 COPY requirements.txt /requirements.txt
@@ -9,8 +9,9 @@ COPY lib /lib
 
 # Install dependencies
 RUN apt-get update
-RUN apt-get install -y python3.7 python3-pip
+RUN apt-get install -y python3-pip nodejs
 RUN pip3 install -r requirements.txt
+RUN npm install jest
 
 # RUNIT
-CMD ["python3.7", "app.py", "&&"]
+CMD ["python3.7", "app.py", "&&", "nodejs", "test.js"]
