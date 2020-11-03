@@ -7,9 +7,9 @@ jobs:
       - name: copy stuff into the repo
         uses: actions/checkout@v1
       - name: install linter
-        uses: apt-get install pycodestyle
+        run: apt-get install pycodestyle
       - name: vibe check
-        uses: pycodestyle app.py
+        run: pycodestyle app.py
   main_test:
     runs-on: ubuntu-latest
     steps:
