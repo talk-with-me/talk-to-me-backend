@@ -9,7 +9,7 @@ COPY lib /lib
 
 # Install dependencies
 RUN apt-get update
-RUN apt-get install -y python3-pip nodejs
+RUN apt-get install -y python3-pip nodejs npm
 RUN pip3 install -r requirements.txt
 RUN npm install jest
 
