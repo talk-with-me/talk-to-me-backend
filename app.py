@@ -103,6 +103,7 @@ def user_leave_room(secret):
         print("bad user not found")
         return
     # todo whatever teardown you need
+    leave_room(userObj['room'])
     socketio.emit('user_disconnected', room=userObj['room'])
     # delete these 2 users from messages, rooms, and queue
     delete_user_from_db(userObj)
