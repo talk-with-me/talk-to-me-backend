@@ -166,6 +166,7 @@ def isQueueReady():
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
     # if not enough in either, then continue waiting
     else:
+        print("IN HERE")
         return "no one"
 
 # ---------------------MAKE SURE TO REMOVE THESE ON RELEASE-----------------------------
