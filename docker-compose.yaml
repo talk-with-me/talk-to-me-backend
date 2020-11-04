@@ -8,6 +8,10 @@ services:
     depends_on:
       - mongo
       - mongo-express
+    environment:
+      MONGO_URL: "mongodb://twmadmin:twm999@mongo:27017"
+    ports:
+      - 8000:8000
 
   mongo:
     image: mongo
