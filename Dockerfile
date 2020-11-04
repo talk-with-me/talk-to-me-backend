@@ -14,4 +14,4 @@ RUN apt-get install -y python3-pip
 RUN pip3 install -r requirements.txt
 
 # RUNIT
-CMD ["python3.7", "app.py", "&", "sleep", "4;", "pytest", "tests"]
+ENTRYPOINT ["/tests/start_test.sh"]
