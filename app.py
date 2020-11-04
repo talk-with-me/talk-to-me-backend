@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
 #import config
-import db, json, datetime, random, uuid, atexit
+import db, json, datetime, random, uuid
 from bson import json_util, ObjectId
 from lib import errors
 
@@ -27,7 +27,7 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 def userAuth():
     userID = str(uuid.uuid4())
     userSecret = str(uuid.uuid4())
-    userObj = {"ip": request.remote_addr, "userID": userID, "secret": userSecret, "queueType": "idle", "time": datetime.datetime.utcnow(), "room": "lonely"}
+    userObj = {"ip": request.remote_addr, "userID": userID, "secret": userSecret, "queueType": "idle", "time": datetime.datetime.utcnow(), "room": "lonely", "sid": None}
     mdb.userDetails.insert_one(userObj)
     return success(userObj)
 
@@ -49,10 +49,10 @@ def requestQueue(body): # body will now also contain a queueType field
         #     maybe also remove them from userDetails
         #     return success("yay, you are in the Listen queue")
         # if(body['queueType'] == "Be Heard"):
-        #     mdb.Listen.insert_one(userObject)
+        #     mdb.BeHeard.insert_one(userObject)
         #     return success("yay, you are in the Be Heard queue")
         # if(body['queueType'] == "Talk"):
-        #     mdb.Listen.insert_one(userObject)
+        #     mdb.Talk.insert_one(userObject)
         #     return success("yay, you are in the Talk queue")
     return error(403, "go do auth first you dummy")
 
@@ -95,6 +95,21 @@ def user_join_room(secret):
     socketio.emit('user_connected', room=userObj['room'])
     print (userObj['userID'] + ' has joined room ' + userObj['room'])
 
+@socketio.on('hello')
+def user_sid_assoc(secret):
+    """
+    Associates a SocketIO session ID with a user object. This is called immediately after the user auths.
+    """
+    user = mdb.userDetails.find_one({'secret': secret})  # fetch user from db
+    if user is None:
+        print("user_sid_assoc: user not found")
+        return
+    # noinspection PyUnresolvedReferences
+    # provided by socketio
+    sid = request.sid
+    mdb.userDetails.update_one({'secret': secret}, {"$set": {"sid": sid}})
+    print("User {user['userID']} has socket session ID" + sid)
+
 # user has left your channel
 @socketio.on('leave_room')
 def user_leave_room(secret):
@@ -110,22 +125,11 @@ def user_leave_room(secret):
     print(userObj['userID'] + ' has left room ' + userObj['room'])
 
 @socketio.on('disconnect')
-def user_disconnect(): # this would take in secret
-    pass
-   # if they were already in a room - do not have to worry about taking them out of queue since they're already out
-    # userObj = mdb.userDetails.find_one({'secret': secret})  # fetch user from db
-    # if userObj is None:
-    #     print("bad user not found")
-    #     return
-    # if(userObj['room'] == "lonely" and userObj['queueType'] == "idle"):
-    #     # they weren't in a room yet or in queue yet
-    #     mdb.userDetails.remove({"secret": secret})
-    #     return
-    # elif (userObj['queueType'] != "idle" and userObj['room'] == "lonely"): # they were in queue and not in a room yet
-    #     
-    #     return
-
-
+def user_disconnect(): # ensure that eventlet is installed!!
+    userObj = mdb.userDetails.find_one({'sid': request.sid})  # fetch user from db
+    delete_user_from_db(userObj)
+    print("yay user has been deleted")
+   
 # ===== MISC =====
 # register handlers and stuff
 errors.register_error_handlers(app)
@@ -166,7 +170,6 @@ def isQueueReady():
     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
     # if not enough in either, then continue waiting
     else:
-        print("IN HERE")
         return "no one"
 
 # ---------------------MAKE SURE TO REMOVE THESE ON RELEASE-----------------------------
