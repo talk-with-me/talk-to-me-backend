@@ -177,6 +177,94 @@ def isQueueReady():
     else:
         return "no one"
 
+
+def findTimeDifference(userTime):
+    difference = difference = datetime.datetime.utcnow() - userTime
+    return (difference.total_seconds > 10)
+
+
+# matchs vent with listen (vice versa), matches talk with talk
+# could possibly split into 2 collections, vent/listen and talk
+# reduce complexity in this function
+def check_queue():
+    # match making for vent/listen
+    # the commented out section might be better, since problem with this
+    # if 2 people are vent/listen, then second person waits for first person to change.
+
+    countVL = mdb.userDetails.count_documents({"$or":[
+                    {"queueType": "vent"}, {"queueType": "listen"}]})
+    if(countVL >= 1):
+        findVent = mdb.userDetails.find_one({"queueType": "vent"})
+        findListen = mdb.userDetails.find_one({"queueType": "listen"})
+
+        # if there is only 1 person that wants to either vent or listen
+        if(findVent is None): # that means someone wants to listen
+            if(findTimeDifference(findListen.time)):
+                mdb.userDetails.update_one({"secret": findListen.secret}, {"$set": {"queueType": "talk"}})
+        elif(findListen is None): # that means someone want to listen
+            if(findTimeDifference(findVent.time)):
+                mdb.userDetails.update_one({"secret": findVent.secret}, {"$set": {"queueType": "talk"}})
+
+        # there is more than 2 people want to either vent or listen
+        else: 
+            userIDs = []
+            userIDs.append(findVent.userID)
+            userIDs.append(findListen.userID)
+
+            match_making(userIDs) 
+            notify_queue_complete(userIDs)
+
+
+        # query = mdb.userDetails.find({"$or": [{"queueType": "talk"}, {"queueType": "vent"}]},
+        #             {"userID": 1, "secret": 1, "time": 1, "_id": 0}).limit(2)
+        # users = []
+        # for x in query:
+        #     users.append(x)
+
+        # if(len(users) == 1):
+        #     if(findTimeDifference(users[0].time)): # probably not correct syntax
+        #         mdb.userDetails.update_one({"secret": users[0].secret}, {"$set": {"queueType": "talk"}})
+        #     else:
+        #         print("continue waiting")
+        # else: # have at least 2 users in VENT/LISTEN
+        #     findVent = mdb.userDetails.find_one({"queueType": "vent"})
+        #     findListen = mdb.userDetails.find_one({"queueType": "listen"})
+
+        #     if(findVent, findListen is None): # is this syntax right?
+        #         if(findTimeDifference(findVent.time)):
+        #             mdb.userDetails.update_one({"secret": findVent.secret}, {"$set": {"queueType": "talk"}})
+        #         if(findTimeDifference(findListen.time)):
+        #             mdb.userDetails.update_one({"secret": findListen.secret}, {"$set": {"queueType": "talk"}})
+        #     else:
+        #         userIDs = []
+        #         userIDs.append(findVent.userID)
+        #         userIDs.append(findListen.userID)
+
+        #         match_making(userIDs) 
+        #         notify_queue_complete(userIDs)
+
+    # matchmaking for talk (same as isQueueReady)
+    countTalk = mdb.userDetails.count_documents({"queueType": "talk"})
+    if(countTalk >= 2):
+        # this should find the first two people in the queue
+        query = mdb.userDetails.find(
+                {"queueType": "inQueue"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
+        userIDs = []
+        for x in query:
+            userIDs.append(x['userID'])
+        match_making(userIDs)
+        notify_queue_complete(userIDs) # pass user_id into notify_queue_complete()
+        return "checked"
+
+    # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
+    # if not enough in either, then continue waiting
+    else:
+        return "no one"
+
+            
+                
+
+
 # ---------------------MAKE SURE TO REMOVE THESE ON RELEASE-----------------------------
 # deletes all documents in UserDetails
 @app.route('/deleteUserDetails')
