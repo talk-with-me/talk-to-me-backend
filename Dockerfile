@@ -6,12 +6,12 @@ COPY requirements.txt /requirements.txt
 COPY app.py /app.py
 COPY db.py /db.py
 COPY lib /lib
+COPY tests /tests
 
 # Install dependencies
 RUN apt-get update
-RUN apt-get install -y python3-pip nodejs npm
+RUN apt-get install -y python3-pip
 RUN pip3 install -r requirements.txt
-RUN npm install jest
 
 # RUNIT
-CMD ["python3.7", "app.py", "&&", "nodejs", "test.js"]
+CMD ["python3.7", "app.py", "&", "sleep", "4;", "pytest", "tests"]
