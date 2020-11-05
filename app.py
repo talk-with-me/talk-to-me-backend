@@ -37,27 +37,15 @@ def userAuth():
 
 # When a selection is made, the user's respective fiels are updated in the db
 @app.route('/queue', methods = ['POST'])
-@expect_json(secret=str)
+@expect_json(secret=str, queueType=str)
 def requestQueue(body): # body will now also contain a queueType field
     userObject = mdb.userDetails.find_one({"secret": body['secret']}) # Fetches user from db
-    if (userObject != None): # TODO: return different response if user is already in queue or in a room
-        # if(userObject['queueType'] != "idle" or userObject['room'] != "lonely"):
-        #     return error(403, "nah you already in queue or in a room")
+    if (userObject != None):
+        if(userObject['queueType'] != "idle" or userObject['room'] != "lonely"):
+            return error(403, "nah you already in queue or in a room")
         mdb.userDetails.update_one({"secret": body['secret']},
-                                   {"$set": {"queueType": "inQueue", "time": time.time()}})
-        return success("yay, you are in queue now")
-        # mdb.userDetails.update_one({"secret": body['secret']},
-        #                            {"$set": {"queueType": body['queueType'], "time": datetime.datetime.utcnow()}})
-        # if(body['queueType'] == "Listen"):
-        #     mdb.Listen.insert_one(userObject)
-        #     maybe also remove them from userDetails
-        #     return success("yay, you are in the Listen queue")
-        # if(body['queueType'] == "Be Heard"):
-        #     mdb.BeHeard.insert_one(userObject)
-        #     return success("yay, you are in the Be Heard queue")
-        # if(body['queueType'] == "Talk"):
-        #     mdb.Talk.insert_one(userObject)
-        #     return success("yay, you are in the Talk queue")
+                                   {"$set": {"queueType": body['queueType'], "time": time.time()}})
+        return success("you have been placed in queue")
     return error(403, "go do auth first you dummy")
 
 # sends message to all users connected to same room as sender
@@ -99,11 +87,9 @@ def user_join_room(secret):
     socketio.emit('user_connected', room=userObj['room'])
     print (userObj['userID'] + ' has joined room ' + userObj['room'])
 
+# associates a SocketIO session ID with a user object. This is called immediately after the user auths
 @socketio.on('hello')
 def user_sid_assoc(secret):
-    """
-    Associates a SocketIO session ID with a user object. This is called immediately after the user auths.
-    """
     user = mdb.userDetails.find_one({'secret': secret})  # fetch user from db
     if user is None:
         print("user_sid_assoc: user not found")
@@ -140,7 +126,6 @@ def user_disconnect(): # ensure that eventlet is installed!!
 errors.register_error_handlers(app)
 
 # ===== DEV ONLY ====
-# currently, doesn't pop users off the queue, so they stay there
 
 def notify_queue_complete(user_id):
     socketio.emit("queue_complete", {'user_id' : user_id[0]})
@@ -155,62 +140,40 @@ def match_making(userIDs):
     mdb.userDetails.update_one({"userID" : user_ID2}, {"$set": {'room': roomID, "queueType": "outQueue"}})
     print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID)
 
-# @app.route('/isQueueReady', methods=['GET'])
-# #@app.before_first_request
-# def isQueueReady():
-#     # count the number of people in the current queueType inQueue
-#     # eventually replace 1 with whichever queueType user needs
-#     count = mdb.userDetails.count_documents({"queueType": "inQueue"})
-#     if(count >= 2):
-#         # this should find the first two people in the queue
-#         query = mdb.userDetails.find(
-#                 {"queueType": "inQueue"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
-#         userIDs = []
-#         for x in query:
-#             userIDs.append(x['userID'])
-#         match_making(userIDs)
-#         notify_queue_complete(userIDs) # pass user_id into notify_queue_complete()
-#         return "checked"
-
-#     # if there isn't enough people in the 'preferred' queue, then match with someone in another (NOT IMPLEMENTED)
-#     # if not enough in either, then continue waiting
-#     else:
-#         return "no one"
-
 # enough time passes to go to fall back queue(talk)
 def find_time_difference(userTime):
     difference = (time.time() - userTime)
     return (int(difference) > 30)
 
-def change_vent_listen_to_talk(query):
+def change_beheard_listen_to_talk(query):
     for x in query:
         if(find_time_difference(x['time'])):
             mdb.userDetails.update_one({"secret": x['secret']}, {
-                "$set": {"queueType": "talk"}})
+                "$set": {"queueType": "Talk"}})
 
 # matchs vent with listen (vice versa), matches talk with talk
 # keeps in one collection instead of multiple for each queueType
 # problematic if large number of people
 def check_queue():
-    countVent = mdb.userDetails.count_documents({"queueType": "vent"})
-    countListen = mdb.userDetails.count_documents({"queueType": "listen"})
+    countBeHeard = mdb.userDetails.count_documents({"queueType": "Be Heard"})
+    countListen = mdb.userDetails.count_documents({"queueType": "Listen"})
     
     # --------MATCH MAKING FOR VENT OR LISTEN----------
 
     # at least 1 person in either vent or listen
-    if (countVent + countListen) > 0:
+    if (countBeHeard + countListen) > 0:
         # at least 1 person in vent AND listen, so match them
-        if(countVent >= 1 & countListen >= 1):
-            getVent = mdb.userDetails.find_one({"queueType": "vent"})
-            getListen = mdb.userDetails.find_one({"queueType": "listen"})
+        if(countBeHeard >= 1 & countListen >= 1):
+            getBeHeard = mdb.userDetails.find_one({"queueType": "Be Heard"})
+            getListen = mdb.userDetails.find_one({"queueType": "Listen"})
             
             # if someone leaves the queue at this moment
             # there might be a better way to write this case
-            if(getVent is None or getListen is None):
+            if(getBeHeard is None or getListen is None):
                 return
 
             userIDs = []
-            userIDs.append(getVent['userID'])
+            userIDs.append(getBeHeard['userID'])
             userIDs.append(getListen['userID'])
 
             match_making(userIDs)
@@ -219,29 +182,24 @@ def check_queue():
         # checks if they been waiting too long and changes them to talk
         else:
             if(countListen == 0): # no one in listen
-                queryVent = mdb.userDetails.find({"queueType": "vent"}, {"time": 1, "secret": 1, "_id": 0})
-                change_vent_listen_to_talk(queryVent)
+                queryBeHeard = mdb.userDetails.find({"queueType": "Be Heard"}, {"time": 1, "secret": 1, "_id": 0})
+                change_beheard_listen_to_talk(queryBeHeard)
             else: # no one in vent
-                queryListen = mdb.userDetails.find({"queueType": "listen"}, {"time": 1, "secret": 1, "_id": 0})
-                change_vent_listen_to_talk(queryListen)
+                queryListen = mdb.userDetails.find({"queueType": "Listen"}, {"time": 1, "secret": 1, "_id": 0})
+                change_beheard_listen_to_talk(queryListen)
             
     # ------------MATCH MAKING FOR TALK--------------
     # matchmaking for talk (same as isQueueReady)
-    countTalk = mdb.userDetails.count_documents({"queueType": "talk"})
+    countTalk = mdb.userDetails.count_documents({"queueType": "Talk"})
     if(countTalk >= 2):
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
-                {"queueType": "talk"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
+                {"queueType": "Talk"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
         userIDs = []
         for x in query:
             userIDs.append(x['userID'])
         match_making(userIDs)
         notify_queue_complete(userIDs) # pass user_id into notify_queue_complete()
-
-
-            
-                
-
 
 # ---------------------MAKE SURE TO REMOVE THESE ON RELEASE-----------------------------
 # deletes all documents in UserDetails
@@ -268,7 +226,6 @@ def delete_all_details():
     return "all gone!"
 
 # APScheduler running in background 
-# Ideally this will check all 3 databases regularly
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=check_queue,
@@ -280,7 +237,6 @@ scheduler.add_job(
 scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
-
 
 if __name__ == '__main__':
     socketio.run(app, port=8000, host="0.0.0.0")
