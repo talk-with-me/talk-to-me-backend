@@ -72,11 +72,25 @@ def handleMessage(jsonObj):
         "author": user_id,
         "timestamp": datetime.datetime.now(),
         "nonce": jsonObj['nonce'],
-        "content": jsonObj['message']
+        "content": jsonObj['message'],
+        "liked": False
     }
     mdb.messages.insert_one(message)
     socketio.emit('send_message_to_client', clean_json(message) ,room = room_id)
     return success(message, 201)
+
+@app.route('/likes', methods = ['POST'])
+@expect_json(secret=str, message_id=str)
+def handle_message_like(body):
+    user = mdb.userDetails.find_one({"secret": body['secret']})
+    if user is None:
+        return error(403, "do auth first you dummy")
+    room_id = user['room']
+    message_id = body["message_id"]
+    print(f'Liking message {message_id}')
+    mdb.messages.update_one({"_id": ObjectId(message_id)}, {"$set": {"liked": True}})
+    socketio.emit('message_liked', {"message_id": message_id, "user_id": user['userID']}, room=room_id)
+    return success("message liked", 200)
 
 def delete_user_from_db(userObj):
     mdb.userDetails.delete_one({'secret': userObj['secret']})
