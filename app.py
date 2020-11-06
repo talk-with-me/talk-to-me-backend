@@ -117,7 +117,7 @@ def user_leave_room(secret):
 @socketio.on('disconnect')
 def user_disconnect(): # ensure that eventlet is installed!!
     userObj = mdb.userDetails.find_one({'sid': request.sid})  # fetch user from db
-    socketio.emit('user_disconnected', room=userObj['room'])
+    #socketio.emit('user_disconnected', room=userObj['room'])
     delete_user_from_db(userObj)
     print("yay user has been deleted")
    
@@ -145,35 +145,35 @@ def find_time_difference(userTime):
     difference = (time.time() - userTime)
     return (int(difference) > 30)
 
-def change_beheard_listen_to_talk(query):
+def change_vent_listen_to_talk(query):
     for x in query:
         if(find_time_difference(x['time'])):
             mdb.userDetails.update_one({"secret": x['secret']}, {
-                "$set": {"queueType": "Talk"}})
+                "$set": {"queueType": "talk"}})
 
 # matchs vent with listen (vice versa), matches talk with talk
 # keeps in one collection instead of multiple for each queueType
 # problematic if large number of people
 def check_queue():
-    countBeHeard = mdb.userDetails.count_documents({"queueType": "Be Heard"})
-    countListen = mdb.userDetails.count_documents({"queueType": "Listen"})
+    countVent = mdb.userDetails.count_documents({"queueType": "vent"})
+    countListen = mdb.userDetails.count_documents({"queueType": "listen"})
     
     # --------MATCH MAKING FOR VENT OR LISTEN----------
 
     # at least 1 person in either vent or listen
-    if (countBeHeard + countListen) > 0:
+    if (countVent + countListen) > 0:
         # at least 1 person in vent AND listen, so match them
-        if(countBeHeard >= 1 & countListen >= 1):
-            getBeHeard = mdb.userDetails.find_one({"queueType": "Be Heard"})
-            getListen = mdb.userDetails.find_one({"queueType": "Listen"})
+        if(countVent >= 1 & countListen >= 1):
+            getVent = mdb.userDetails.find_one({"queueType": "vent"})
+            getListen = mdb.userDetails.find_one({"queueType": "listen"})
             
             # if someone leaves the queue at this moment
             # there might be a better way to write this case
-            if(getBeHeard is None or getListen is None):
+            if(getVent is None or getListen is None):
                 return
 
             userIDs = []
-            userIDs.append(getBeHeard['userID'])
+            userIDs.append(getVent['userID'])
             userIDs.append(getListen['userID'])
 
             match_making(userIDs)
@@ -182,19 +182,19 @@ def check_queue():
         # checks if they been waiting too long and changes them to talk
         else:
             if(countListen == 0): # no one in listen
-                queryBeHeard = mdb.userDetails.find({"queueType": "Be Heard"}, {"time": 1, "secret": 1, "_id": 0})
-                change_beheard_listen_to_talk(queryBeHeard)
+                queryVent = mdb.userDetails.find({"queueType": "vent"}, {"time": 1, "secret": 1, "_id": 0})
+                change_vent_listen_to_talk(queryVent)
             else: # no one in vent
-                queryListen = mdb.userDetails.find({"queueType": "Listen"}, {"time": 1, "secret": 1, "_id": 0})
-                change_beheard_listen_to_talk(queryListen)
+                queryListen = mdb.userDetails.find({"queueType": "listen"}, {"time": 1, "secret": 1, "_id": 0})
+                change_vent_listen_to_talk(queryListen)
             
     # ------------MATCH MAKING FOR TALK--------------
     # matchmaking for talk (same as isQueueReady)
-    countTalk = mdb.userDetails.count_documents({"queueType": "Talk"})
+    countTalk = mdb.userDetails.count_documents({"queueType": "talk"})
     if(countTalk >= 2):
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
-                {"queueType": "Talk"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
+                {"queueType": "talk"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
         userIDs = []
         for x in query:
             userIDs.append(x['userID'])
