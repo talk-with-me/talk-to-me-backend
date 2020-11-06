@@ -117,6 +117,8 @@ def user_leave_room(secret):
 @socketio.on('disconnect')
 def user_disconnect(): # ensure that eventlet is installed!!
     userObj = mdb.userDetails.find_one({'sid': request.sid})  # fetch user from db
+    if(userObj is None): # still not sure why this would happen but here's protection in case
+        return
     socketio.emit('user_disconnected', room=userObj['room'])
     delete_user_from_db(userObj)
     print("yay user has been deleted")
