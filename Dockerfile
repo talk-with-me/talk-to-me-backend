@@ -1,14 +1,15 @@
 # Use Debian buster as OS environment
 FROM python:3.7
 
-# Copy over stuff
+# Copy over requirements
 COPY requirements.txt /requirements.txt
-COPY app.py /app.py
-COPY db.py /db.py
-COPY lib /lib
 
 # Install dependencies
 RUN pip3 install -r requirements.txt
 
+# build cache
+COPY . .
+
 # RUNIT
-ENTRYPOINT python3 app.py
+# ENTRYPOINT python3 app.py
+ENTRYPOINT gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:8000 app:app
