@@ -1,8 +1,12 @@
+import sys
+
 from flask import Flask, render_template, redirect, url_for, jsonify, request, Response
 from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
 #import config
+from pymongo import MongoClient
+
 import db, json, datetime, random, uuid
 from bson import json_util, ObjectId
 from lib import errors
@@ -18,7 +22,7 @@ import os
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ttm'
 CORS(app)
-mdb = PyMongo(app, db.MONGO_URL).db
+mdb = MongoClient(db.MONGO_URL).db
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 # ===== REST =====
@@ -127,6 +131,7 @@ def user_leave_room(secret):
 @socketio.on('disconnect')
 def user_disconnect(): # ensure that eventlet is installed!!
     userObj = mdb.userDetails.find_one({'sid': request.sid})  # fetch user from db
+    socketio.emit('user_disconnected', room=userObj['room'])
     delete_user_from_db(userObj)
     print("yay user has been deleted")
    
@@ -212,4 +217,4 @@ atexit.register(lambda: scheduler.shutdown())
 
 
 if __name__ == '__main__':
-    socketio.run(app, port=8000)
+    socketio.run(app, port=8000, host="0.0.0.0")
