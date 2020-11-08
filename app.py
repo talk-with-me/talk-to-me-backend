@@ -159,7 +159,7 @@ def match_making(userIDs):
 # enough time passes to go to fall back queue(talk)
 def find_time_difference(userTime):
     difference = (time.time() - userTime)
-    return (int(difference) > 30)
+    return (int(difference) > 10)
 
 def change_vent_listen_to_talk(query):
     for x in query:
