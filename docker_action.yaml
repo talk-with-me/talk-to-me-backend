@@ -1,5 +1,0 @@
-name: "talk-to-me backend"
-description: "docker image containing all dependencies required for talk-to-me backend"
-runs:
-  using: 'docker'
-  image: 'Dockerfile.ci'

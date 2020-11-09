@@ -17,8 +17,8 @@ services:
       - mongo
     environment:
       - MONGO_URL=mongodb://user:secret@mongo:27017
-    volumes:
-      - "./shared/app/shared"
+    ports:
+      - "8000:8000"
 
   mongo:
     image: mongo
@@ -26,4 +26,4 @@ services:
       MONGO_USER: user
       MONGO_PASS: secret
     ports:
-      - 58017:27017
+      - "58017:27017"
