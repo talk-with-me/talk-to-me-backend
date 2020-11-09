@@ -10,11 +10,15 @@ def test_get_auth():
     user = r.json()['data']
     assert(r.status_code == 200)
 
-def test_bad_select():
-    r = requests.post('http://localhost:8000/queue', json={"secret":"fender"})
+def test_bad_enqueue_bad_secret():
+    r = requests.post('http://localhost:8000/queue', json={'secret':'fender', 'queueType':'vent'})
     assert(r.status_code == 403)
 
-def test_good_select():
+def test_bad_enqueue_no_queue_type():
+    r = requests.post('http://localhost:8000/queue', json={'secret':user['secret']})
+    assert(r.status_code == 400)
+
+def test_good_enqueue_vent():
     global users
-    r = requests.post('http://localhost:8000/queue', json={"secret":user['secret']})
+    r = requests.post('http://localhost:8000/queue', json={'secret':user['secret'], 'queueType':'vent'})
     assert(r.status_code == 200)
