@@ -16,7 +16,7 @@ jobs:
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
       - name: compose the docker stack
-        uses: docker-compose up --build
+        run: docker-compose up --build
       - name: run tests
-        uses: pytest tests
+        run: pytest tests
 
