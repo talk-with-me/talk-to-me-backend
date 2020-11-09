@@ -3,9 +3,9 @@ click==7.1.2
 dnspython==1.16.0
 eventlet==0.29.1
 Flask==1.1.2
-Flask-cors==3.0.9
-Flask-pymongo==2.3.0
-Flask-socketio==4.3.1
+Flask-Cors==3.0.9
+Flask-Pymongo==2.3.0
+Flask-Socketio==4.3.1
 greenlet==0.4.17
 gunicorn==20.0.4
 itsdangerous==1.1.0
