@@ -84,6 +84,28 @@ def handle_message_like(body):
     socketio.emit('message_liked', {"message_id": message_id, "user_id": user['userID']}, room=room_id)
     return success("message liked", 200)
 
+@app.route('/report', methods = ['POST'])
+@expect_json(secret=str)
+def handle_report(body):
+    user = mdb.userDetails.find_one({"secret": body['secret']})
+    if user is None:
+        return error(403, "user who clicked on report not found")
+    roomObj = mdb.rooms.find_one({"room": user['room']})
+    if(roomObj['user1'] == user['userID'])
+        reportedUserId = roomObj['user2']
+    else:
+        reportedUserId = roomObj['user1']
+    reportedConversation = mdb.messages.find({"room_id": roomObj['room']})
+    #reportedMessages = mdb.messages.find({"room_id": roomObj['roomID']}, {"author": reportedUserId})
+    for (m in reportedConversation)
+        message = {
+            "room_id": m['room_id'],
+            "author": m['author'],
+            "content": m['content'],
+        }
+        mdb.reported.insert_one(message)
+    return success("conversation reported", 200)
+
 def delete_user_from_db(userObj):
     mdb.userDetails.delete_one({'secret': userObj['secret']})
     mdb.messages.delete_many({'author': userObj['userID']}) # can proablby do by roomID
@@ -125,7 +147,7 @@ def user_leave_room(secret):
     leave_room(userObj['room'])
     socketio.emit('user_disconnected', room=userObj['room'])
     # delete these 2 users from messages, rooms, and queue
-    delete_user_from_db(userObj)
+    # delete_user_from_db(userObj) let's see if we can not remove users when they leave room, we need this info
     print(userObj['userID'] + ' has left room ' + userObj['room'])
 
 @socketio.on('disconnect')
