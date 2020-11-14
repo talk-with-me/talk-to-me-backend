@@ -84,26 +84,30 @@ def handle_message_like(body):
     socketio.emit('message_liked', {"message_id": message_id, "user_id": user['userID']}, room=room_id)
     return success("message liked", 200)
 
-@app.route('/report', methods = ['POST'])
-@expect_json(secret=str)
+@app.route('/reports', methods = ['POST'])
+@expect_json(secret=str, reason=str)
 def handle_report(body):
     user = mdb.userDetails.find_one({"secret": body['secret']})
     if user is None:
         return error(403, "user who clicked on report not found")
     roomObj = mdb.rooms.find_one({"room": user['room']})
-    if(roomObj['user1'] == user['userID'])
+
+    if(roomObj['user1'] == user['userID']):
         reportedUserId = roomObj['user2']
     else:
         reportedUserId = roomObj['user1']
+
+    # insert a Report object into a reports collection
+    mdb.reports.insert_one({
+        "reporter": user['userID'],
+        "reported_id": reportedUserId,
+        "reason": body['reason'],
+        "room_id": roomObj['room']
+    })
+
+    # copy all message objs in reported conversation to the other collection
     reportedConversation = mdb.messages.find({"room_id": roomObj['room']})
-    #reportedMessages = mdb.messages.find({"room_id": roomObj['roomID']}, {"author": reportedUserId})
-    for (m in reportedConversation)
-        message = {
-            "room_id": m['room_id'],
-            "author": m['author'],
-            "content": m['content'],
-        }
-        mdb.reported.insert_one(message)
+    mdb.reported_messages.insert_many(list(reportedConversation))
     return success("conversation reported", 200)
 
 def delete_user_from_db(userObj):
