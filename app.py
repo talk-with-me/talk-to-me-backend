@@ -110,10 +110,28 @@ def handle_report(body):
     mdb.reported_messages.insert_many(list(reportedConversation))
     return success("conversation reported", 200)
 
+# delete userObj from all collections
 def delete_user_from_db(userObj):
     mdb.userDetails.delete_one({'secret': userObj['secret']})
-    mdb.messages.delete_many({'author': userObj['userID']}) # can proablby do by roomID
+    mdb.messages.delete_many({'author': userObj['userID']})
     mdb.rooms.delete_one({'room': userObj['room']})
+
+# makes sure both users have left the room before removing from db
+# should only go in here if user closes tab or presses home if in room
+def check_users_in_room(room_id):
+    roomObj = mdb.rooms.find_one({'room': room_id})
+    if roomObj is None:
+        print("bad room, not found")
+        return
+
+    # at least 1 user disconnected, so this is the 2nd user
+    if(roomObj['disconnected'] >= 1):
+        user1 = mdb.userDetails.find_one({'userID': roomObj['user1']})
+        user2 = mdb.userDetails.find_one({'userID': roomObj['user2']})
+        delete_user_from_db(user1)
+        delete_user_from_db(user2)
+    else:
+        mdb.rooms.update_one({'room': room_id}, {"$set": {'disconnected': 1}})
 
 # ====== SOCKET STUFF =====
 # socket event to have user actually join the room
@@ -152,6 +170,7 @@ def user_leave_room(secret):
     socketio.emit('user_disconnected', room=userObj['room'])
     # delete these 2 users from messages, rooms, and queue
     # delete_user_from_db(userObj) let's see if we can not remove users when they leave room, we need this info
+    check_users_in_room(userObj['room'])
     print(userObj['userID'] + ' has left room ' + userObj['room'])
 
 @socketio.on('disconnect')
@@ -160,7 +179,12 @@ def user_disconnect(): # ensure that eventlet is installed!!
     if(userObj is None): # still not sure why this would happen but here's protection in case
         return
     socketio.emit('user_disconnected', room=userObj['room'])
-    delete_user_from_db(userObj)
+
+    # check to see if user disconnected while in room or in a queue
+    if(userObj['queueType'] == "outQueue"):
+        check_users_in_room(userObj['room'])
+    else:
+        delete_user_from_db(userObj)
     print("yay user has been deleted")
    
 # ===== MISC =====
@@ -177,7 +201,7 @@ def match_making(userIDs):
     roomID = str(uuid.uuid4())
     user_ID1 = userIDs[0]
     user_ID2 = userIDs[1]
-    mdb.rooms.insert_one({"room" : roomID, 'user1' : user_ID1, 'user2' : user_ID2})
+    mdb.rooms.insert_one({"room" : roomID, 'user1' : user_ID1, 'user2' : user_ID2, "disconnected": 0})
     mdb.userDetails.update_one({"userID" : user_ID1}, {"$set": {'room': roomID, "queueType": "outQueue"}})
     mdb.userDetails.update_one({"userID" : user_ID2}, {"$set": {'room': roomID, "queueType": "outQueue"}})
     print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID)
