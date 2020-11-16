@@ -73,8 +73,8 @@ def request_queue(body):  # body will now also contain a queueType field
     if user_object is not None:
         if user_object["queueType"] == "banned":
             return success("sike, you banned")
-        elif user_object["queueType"] != "idle" or
-        user_object["room"] != "lonely":
+        elif (user_object["queueType"] != "idle" or
+                user_object["room"] != "lonely"):
             return error(403, "nah you already in queue or in a room")
 
         mdb.userDetails.update_one(
