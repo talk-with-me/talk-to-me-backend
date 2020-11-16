@@ -42,7 +42,9 @@ scheduler = BackgroundScheduler()
 # ===== REST =====
 @app.route("/auth", methods=["GET"])
 def user_auth():
-    """Generates an id and secret for the user, stores in db, returns them to user."""
+    """Generates an id and secret for the user, stores them and returns them
+    to user.
+    """
     user_id = str(uuid.uuid4())
     user_secret = str(uuid.uuid4())
     user_obj = {
@@ -68,7 +70,7 @@ def request_queue(body):
     """User chooses queueType."""
     user_object = mdb.userDetails.find_one(
         {"secret": body["secret"]}          # Fetches user from db
-    )  
+    )
     if user_object is not None:
         if user_object["queueType"] == "banned":
             return success("sike, you banned")
@@ -328,8 +330,8 @@ def find_time_difference(userTime):
     return int(difference) > 10
 
 
-"""Change user queueType from listen to talk"""
 def change_vent_listen_to_talk(query):
+    """Change user queueType from listen to talk"""
     for x in query:
         if find_time_difference(x["time"]):
             mdb.userDetails.update_one(
