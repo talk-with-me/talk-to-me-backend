@@ -40,10 +40,9 @@ scheduler = BackgroundScheduler()
 
 
 # ===== REST =====
-# assign users a generated user_id and secret. Stores user in db then redirects
-# to queue selection
 @app.route("/auth", methods=["GET"])
 def user_auth():
+    """Generates an id and secret for the user, stores in db, returns them to user."""
     user_id = str(uuid.uuid4())
     user_secret = str(uuid.uuid4())
     user_obj = {
@@ -63,13 +62,13 @@ def user_auth():
     return success(user_obj)
 
 
-# When a selection is made, the user's respective fiels are updated in the db
 @app.route("/queue", methods=["POST"])
 @expect_json(secret=str, queueType=str)
-def request_queue(body):  # body will now also contain a queueType field
+def request_queue(body):
+    """User chooses queueType."""
     user_object = mdb.userDetails.find_one(
-        {"secret": body["secret"]}
-    )  # Fetches user from db
+        {"secret": body["secret"]}          # Fetches user from db
+    )  
     if user_object is not None:
         if user_object["queueType"] == "banned":
             return success("sike, you banned")
@@ -85,10 +84,10 @@ def request_queue(body):  # body will now also contain a queueType field
     return error(403, "go do auth first you dummy")
 
 
-# sends message to all users connected to same room as sender
 @app.route("/messages", methods=["POST"])
 @expect_json(secret=str, message=str, nonce=str)
 def handle_message(jsonObj):
+    """User sends message."""
     user_obj = mdb.userDetails.find_one({"secret": jsonObj["secret"]})
     if user_obj is None:
         return error(403, "do auth first you dummy")
@@ -127,6 +126,7 @@ def handle_message(jsonObj):
 @app.route("/likes", methods=["POST"])
 @expect_json(secret=str, message_id=str)
 def handle_message_like(body):
+    """User likes message."""
     user = mdb.userDetails.find_one({"secret": body["secret"]})
     if user is None:
         return error(403, "do auth first you dummy")
@@ -146,6 +146,7 @@ def handle_message_like(body):
 @app.route("/reports", methods=["POST"])
 @expect_json(secret=str, reason=str)
 def handle_report(body):
+    """User reports conversation."""
     user = mdb.userDetails.find_one({"secret": body["secret"]})
     if user is None:
         return error(403, "user who clicked on report not found")
@@ -187,16 +188,15 @@ def handle_report(body):
     return success("conversation reported", 200)
 
 
-# delete user_obj from all collections
 def delete_user_from_db(user_obj):
+    """Delete user_obj from all collections."""
     mdb.userDetails.delete_one({"secret": user_obj["secret"]})
     mdb.messages.delete_many({"author": user_obj["user_id"]})
     mdb.rooms.delete_one({"room": user_obj["room"]})
 
 
-# makes sure both users have left the room before removing from db
-# should only go in here if user closes tab or presses home if in room
 def check_users_in_room(room_id):
+    """Check that both users left room before deleting room."""
     room_obj = mdb.rooms.find_one({"room": room_id})
     if room_obj is None:
         print("bad room, not found")
@@ -213,9 +213,9 @@ def check_users_in_room(room_id):
 
 
 # ====== SOCKET STUFF =====
-# socket event to have user actually join the room
 @socketio.on("join_room")
 def user_join_room(secret):
+    """Socket event to have user actually join the room."""
     user_obj = mdb.userDetails.find_one({"secret": secret})  # fetch user
     if user_obj is None:
         print("bad user not found")
@@ -225,10 +225,9 @@ def user_join_room(secret):
     print(user_obj["user_id"] + " has joined room " + user_obj["room"])
 
 
-# associates a SocketIO session ID with a user object. This is called
-# immediately after the user auths
 @socketio.on("hello")
 def user_sid_assoc(secret):
+    """Associates a SocketIO session ID with a user object."""
     user = mdb.userDetails.find_one({"secret": secret})  # fetch user from db
     if user is None:
         print("user_sid_assoc: user not found")
@@ -240,9 +239,9 @@ def user_sid_assoc(secret):
     print("User {user['user_id']} has socket session ID" + sid)
 
 
-# user has left your channel
 @socketio.on("leave_room")
 def user_leave_room(secret):
+    """User leaves room."""
     user_obj = mdb.userDetails.find_one({"secret": secret})  # fetch user
     if user_obj is None:
         print("bad user not found")
@@ -259,6 +258,7 @@ def user_leave_room(secret):
 
 @socketio.on("disconnect")
 def user_disconnect():  # ensure that eventlet is installed!!
+    """User disconnects from app."""
     user_obj = mdb.userDetails.find_one({"sid": request.sid})  # fetch user
     if (
         user_obj is None
@@ -278,23 +278,25 @@ def user_disconnect():  # ensure that eventlet is installed!!
 # register handlers and stuff
 errors.register_error_handlers(app)
 
+# ===== DEV ONLY ====
 
-# checks if user is banned
+
 def is_banned(user_ip):
+    """Checks if user is banned."""
     if mdb.bannedUsers.find_one({"ip": user_ip}) is None:
         return False
     else:
         return True
 
-# ===== DEV ONLY ====
-
 
 def notify_queue_complete(user_id):
+    """Broadcast that room is ready to be joined for two users."""
     socketio.emit("queue_complete", {"user_id": user_id[0]})
     socketio.emit("queue_complete", {"user_id": user_id[1]})
 
 
 def match_making(user_ids):
+    """Matchmaking algorithm, ran in background."""
     roomID = str(uuid.uuid4())
     user_ID1 = user_ids[0]
     user_ID2 = user_ids[1]
@@ -320,12 +322,13 @@ def match_making(user_ids):
     )
 
 
-# enough time passes to go to fall back queue(talk)
 def find_time_difference(userTime):
+    """See if enough time passed to go to fall back queue(talk)."""
     difference = time.time() - userTime
     return int(difference) > 10
 
 
+"""Change user queueType from listen to talk"""
 def change_vent_listen_to_talk(query):
     for x in query:
         if find_time_difference(x["time"]):
@@ -334,10 +337,11 @@ def change_vent_listen_to_talk(query):
             )
 
 
-# matchs vent with listen (vice versa), matches talk with talk
-# keeps in one collection instead of multiple for each queueType
-# problematic if large number of people
 def check_queue():
+    """Matches vent with listen (vice versa), matches talk with talk
+    keeps in one collection instead of multiple for each queueType
+    problematic if large number of people.
+    """
     countVent = mdb.userDetails.count_documents({"queueType": "vent"})
     countListen = mdb.userDetails.count_documents({"queueType": "listen"})
 
@@ -392,27 +396,30 @@ def check_queue():
 
 
 # -----------------MAKE SURE TO REMOVE THESE ON RELEASE---------------------
-# deletes all documents in UserDetails
 @app.route("/deleteUserDetails")
 def delete_user_details():
+    """Deletes all documents in UserDetails."""
     mdb.userDetails.delete_many({})
     return "deleted all docs in userDetails"
 
 
 @app.route("/deleteRoomDetails")
 def delete_room_details():
+    """Deletes all rooms."""
     mdb.rooms.delete_many({})
     return "deleted all docs in rooms"
 
 
 @app.route("/deleteMessageDetails")
 def delete_message_details():
+    """Deletes all messages."""
     mdb.messages.delete_many({})
     return "deleted all docs in messages"
 
 
 @app.route("/deleteAllDetails")
 def delete_all_details():
+    """Nukes the database."""
     mdb.userDetails.delete_many({})
     mdb.rooms.delete_many({})
     mdb.messages.delete_many({})
