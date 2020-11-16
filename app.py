@@ -25,13 +25,30 @@ CORS(app)
 mdb = MongoClient(db.MONGO_URL).db
 socketio = SocketIO(app, cors_allowed_origins='*')
 
+def is_banned(user_ip):
+    if(mdb.bannedUsers.find_one({'ip': user_ip}) is None):
+        return False
+    else:
+        return True
+
 # ===== REST =====
 # assign users a generated userID and secret. Stores user in db then redirects to queue selection
 @app.route('/auth', methods = ['GET'])
 def userAuth():
     userID = str(uuid.uuid4())
     userSecret = str(uuid.uuid4())
-    userObj = {"ip": request.remote_addr, "userID": userID, "secret": userSecret, "queueType": "idle", "time": time.time(), "room": "lonely", "sid": None}
+    userObj = {
+        "ip": request.remote_addr, 
+        "userID": userID, 
+        "secret": userSecret, 
+        "queueType": "idle", 
+        "time": time.time(), 
+        "room": "lonely", 
+        "sid": None}
+   
+    if(is_banned(userObj['ip'])):
+        userObj['queueType'] = "banned"
+
     mdb.userDetails.insert_one(userObj)
     return success(userObj)
 
@@ -41,8 +58,11 @@ def userAuth():
 def requestQueue(body): # body will now also contain a queueType field
     userObject = mdb.userDetails.find_one({"secret": body['secret']}) # Fetches user from db
     if (userObject != None):
-        if(userObject['queueType'] != "idle" or userObject['room'] != "lonely"):
+        if(userObject['queueType'] == "banned"):
+            return success("sike, you banned")
+        elif(userObject['queueType'] != "idle" or userObject['room'] != "lonely"):
             return error(403, "nah you already in queue or in a room")
+
         mdb.userDetails.update_one({"secret": body['secret']},
                                    {"$set": {"queueType": body['queueType'], "time": time.time()}})
         return success("you have been placed in queue")
@@ -94,13 +114,20 @@ def handle_report(body):
 
     if(roomObj['user1'] == user['userID']):
         reportedUserId = roomObj['user2']
+        reportedUserIp = mdb.userDetails.find_one({"userID": reportedUserId}, {"ip": 1, "_id": 0})
+        reporterUserIp = mdb.userDetails.find_one({"userID": roomObj['user1']}, {"ip": 1, "_id": 0})
+
     else:
         reportedUserId = roomObj['user1']
+        reportedUserIp = mdb.userDetails.find_one({"userID": reportedUserId}, {"ip": 1, "_id": 0})
+        reporterUserIp = mdb.userDetails.find_one({"userID": roomObj['user2']}, {"ip": 1, "_id": 0})
 
     # insert a Report object into a reports collection
     mdb.reports.insert_one({
         "reporter": user['userID'],
-        "reported_id": reportedUserId,
+        "reporter_ip": reporterUserIp['ip'],
+        "reported": reportedUserId,
+        "reported_ip": reportedUserIp['ip'],
         "reason": body['reason'],
         "room_id": roomObj['room']
     })
@@ -284,11 +311,15 @@ def delete_message_details():
     mdb.messages.delete_many({})
     return "deleted all docs in messages"
 
+
 @app.route('/deleteAllDetails')
 def delete_all_details():
     mdb.userDetails.delete_many({})
     mdb.rooms.delete_many({})
     mdb.messages.delete_many({})
+    mdb.reported_messages.delete_many({})
+    mdb.reports.delete_many({})
+    mdb.bannedUsers.delete_many({})
     return "all gone!"
 
 # APScheduler running in background 
