@@ -10,6 +10,7 @@ from pymongo import MongoClient
 import db, json, datetime, random, uuid, time
 from bson import json_util, ObjectId
 from lib import errors
+import bot.replier
 
 # Configure app
 from lib.utils import clean_json, error, expect_json, success
@@ -24,6 +25,7 @@ app.config['SECRET_KEY'] = 'ttm'
 CORS(app)
 mdb = MongoClient(db.MONGO_URL).db
 socketio = SocketIO(app, cors_allowed_origins='*')
+scheduler = BackgroundScheduler()
 
 # ===== REST =====
 # assign users a generated userID and secret. Stores user in db then redirects to queue selection
@@ -67,6 +69,14 @@ def handleMessage(jsonObj):
         "content": jsonObj['message'],
         "liked": False
     }
+
+    # if the user is banned, hand their message off to a bot
+    # noinspection PyUnreachableCode
+    if False:  # todo: if user_is_banned()
+        bot.replier.schedule_reply_to_message(mdb, socketio, scheduler, content=jsonObj['message'], room_id=room_id, user=userObj)
+        return success(message, 201)
+
+    # otherwise handle the message as normal
     mdb.messages.insert_one(message)
     socketio.emit('send_message_to_client', clean_json(message) ,room = room_id)
     return success(message, 201)
@@ -292,7 +302,6 @@ def delete_all_details():
     return "all gone!"
 
 # APScheduler running in background 
-scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=check_queue,
     trigger="interval", 
