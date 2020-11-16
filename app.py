@@ -1,258 +1,338 @@
-import sys
+# app,py - main file for talk-to-me backend
+# TADAA, Oct 2020
 
-from flask import Flask, render_template, redirect, url_for, jsonify, request, Response
+# import flask stuff
+from flask import Flask, render_template, redirect, url_for, jsonify, \
+        request, Response
 from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
-#import config
+
+# import config
 from pymongo import MongoClient
 
-import db, json, datetime, random, uuid, time
+# import general stuff
+import db
+import os
+import sys
+import uuid
+import time
+import json
+import random
+import atexit
+import datetime
 from bson import json_util, ObjectId
 from lib import errors
+from lib.utils import clean_json, error, expect_json, success
 import bot.replier
 
-# Configure app
-from lib.utils import clean_json, error, expect_json, success
-
+# import async stuff
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-import atexit
-import os
 
+# start app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'ttm'
+app.config["SECRET_KEY"] = "ttm"
 CORS(app)
 mdb = MongoClient(db.MONGO_URL).db
-socketio = SocketIO(app, cors_allowed_origins='*')
+socketio = SocketIO(app, cors_allowed_origins="*")
 scheduler = BackgroundScheduler()
 
-def is_banned(user_ip):
-    if(mdb.bannedUsers.find_one({'ip': user_ip}) is None):
-        return False
-    else:
-        return True
 
 # ===== REST =====
-# assign users a generated userID and secret. Stores user in db then redirects to queue selection
-@app.route('/auth', methods = ['GET'])
-def userAuth():
-    userID = str(uuid.uuid4())
-    userSecret = str(uuid.uuid4())
-    userObj = {
-        "ip": request.remote_addr, 
-        "userID": userID, 
-        "secret": userSecret, 
-        "queueType": "idle", 
-        "time": time.time(), 
-        "room": "lonely", 
-        "sid": None}
-   
-    if(is_banned(userObj['ip'])):
-        userObj['queueType'] = "banned"
+# assign users a generated user_id and secret. Stores user in db then redirects
+# to queue selection
+@app.route("/auth", methods=["GET"])
+def user_auth():
+    user_id = str(uuid.uuid4())
+    user_secret = str(uuid.uuid4())
+    user_obj = {
+        "ip": request.remote_addr,
+        "user_id": user_id,
+        "secret": user_secret,
+        "queueType": "idle",
+        "time": time.time(),
+        "room": "lonely",
+        "sid": None,
+    }
 
-    mdb.userDetails.insert_one(userObj)
-    return success(userObj)
+    if is_banned(user_obj["ip"]):
+        user_obj["queueType"] = "banned"
+
+    mdb.userDetails.insert_one(user_obj)
+    return success(user_obj)
+
 
 # When a selection is made, the user's respective fiels are updated in the db
-@app.route('/queue', methods = ['POST'])
+@app.route("/queue", methods=["POST"])
 @expect_json(secret=str, queueType=str)
-def requestQueue(body): # body will now also contain a queueType field
-    userObject = mdb.userDetails.find_one({"secret": body['secret']}) # Fetches user from db
-    if (userObject != None):
-        if(userObject['queueType'] == "banned"):
+def request_queue(body):  # body will now also contain a queueType field
+    user_object = mdb.userDetails.find_one(
+        {"secret": body["secret"]}
+    )  # Fetches user from db
+    if user_object is not None:
+        if user_object["queueType"] == "banned":
             return success("sike, you banned")
-        elif(userObject['queueType'] != "idle" or userObject['room'] != "lonely"):
+        elif user_object["queueType"] != "idle" or
+        user_object["room"] != "lonely":
             return error(403, "nah you already in queue or in a room")
 
-        mdb.userDetails.update_one({"secret": body['secret']},
-                                   {"$set": {"queueType": body['queueType'], "time": time.time()}})
+        mdb.userDetails.update_one(
+            {"secret": body["secret"]},
+            {"$set": {"queueType": body["queueType"], "time": time.time()}},
+        )
         return success("you have been placed in queue")
     return error(403, "go do auth first you dummy")
 
+
 # sends message to all users connected to same room as sender
-@app.route('/messages', methods = ['POST'])
+@app.route("/messages", methods=["POST"])
 @expect_json(secret=str, message=str, nonce=str)
-def handleMessage(jsonObj):
-    userObj = mdb.userDetails.find_one({"secret": jsonObj['secret']})
-    if(userObj == None):
+def handle_message(jsonObj):
+    user_obj = mdb.userDetails.find_one({"secret": jsonObj["secret"]})
+    if user_obj is None:
         return error(403, "do auth first you dummy")
-    room_id = userObj['room']
-    user_id = userObj['userID']
-    print('Message: ' + jsonObj['message'])
+    room_id = user_obj["room"]
+    user_id = user_obj["user_id"]
+    print("Message: " + jsonObj["message"])
     message = {
         # _id autogenerated
         "room_id": room_id,
         "author": user_id,
         "timestamp": time.time(),
-        "nonce": jsonObj['nonce'],
-        "content": jsonObj['message'],
-        "liked": False
+        "nonce": jsonObj["nonce"],
+        "content": jsonObj["message"],
+        "liked": False,
     }
 
     # if the user is banned, hand their message off to a bot
     # noinspection PyUnreachableCode
     if False:  # todo: if user_is_banned()
-        bot.replier.schedule_reply_to_message(mdb, socketio, scheduler, content=jsonObj['message'], room_id=room_id, user=userObj)
+        bot.replier.schedule_reply_to_message(
+            mdb,
+            socketio,
+            scheduler,
+            content=jsonObj["message"],
+            room_id=room_id,
+            user=user_obj,
+        )
         return success(message, 201)
 
     # otherwise handle the message as normal
     mdb.messages.insert_one(message)
-    socketio.emit('send_message_to_client', clean_json(message) ,room = room_id)
+    socketio.emit("send_message_to_client", clean_json(message), room=room_id)
     return success(message, 201)
 
-@app.route('/likes', methods = ['POST'])
+
+@app.route("/likes", methods=["POST"])
 @expect_json(secret=str, message_id=str)
 def handle_message_like(body):
-    user = mdb.userDetails.find_one({"secret": body['secret']})
+    user = mdb.userDetails.find_one({"secret": body["secret"]})
     if user is None:
         return error(403, "do auth first you dummy")
-    room_id = user['room']
+    room_id = user["room"]
     message_id = body["message_id"]
-    print(f'Liking message {message_id}')
-    mdb.messages.update_one({"_id": ObjectId(message_id)}, {"$set": {"liked": True}})
-    socketio.emit('message_liked', {"message_id": message_id, "user_id": user['userID']}, room=room_id)
+    print(f"Liking message {message_id}")
+    mdb.messages.update_one({"_id": ObjectId(message_id)},
+                            {"$set": {"liked": True}})
+    socketio.emit(
+        "message_liked",
+        {"message_id": message_id, "user_id": user["user_id"]},
+        room=room_id,
+    )
     return success("message liked", 200)
 
-@app.route('/reports', methods = ['POST'])
+
+@app.route("/reports", methods=["POST"])
 @expect_json(secret=str, reason=str)
 def handle_report(body):
-    user = mdb.userDetails.find_one({"secret": body['secret']})
+    user = mdb.userDetails.find_one({"secret": body["secret"]})
     if user is None:
         return error(403, "user who clicked on report not found")
-    roomObj = mdb.rooms.find_one({"room": user['room']})
+    room_obj = mdb.rooms.find_one({"room": user["room"]})
 
-    if(roomObj['user1'] == user['userID']):
-        reportedUserId = roomObj['user2']
-        reportedUserIp = mdb.userDetails.find_one({"userID": reportedUserId}, {"ip": 1, "_id": 0})
-        reporterUserIp = mdb.userDetails.find_one({"userID": roomObj['user1']}, {"ip": 1, "_id": 0})
+    if room_obj["user1"] == user["user_id"]:
+        reported_user_id = room_obj["user2"]
+        reported_user_ip = mdb.userDetails.find_one(
+            {"user_id": reported_user_id}, {"ip": 1, "_id": 0}
+        )
+        reporter_user_ip = mdb.userDetails.find_one(
+            {"user_id": room_obj["user1"]}, {"ip": 1, "_id": 0}
+        )
 
     else:
-        reportedUserId = roomObj['user1']
-        reportedUserIp = mdb.userDetails.find_one({"userID": reportedUserId}, {"ip": 1, "_id": 0})
-        reporterUserIp = mdb.userDetails.find_one({"userID": roomObj['user2']}, {"ip": 1, "_id": 0})
+        reported_user_id = room_obj["user1"]
+        reported_user_ip = mdb.userDetails.find_one(
+            {"user_id": reported_user_id}, {"ip": 1, "_id": 0}
+        )
+        reporter_user_ip = mdb.userDetails.find_one(
+            {"user_id": room_obj["user2"]}, {"ip": 1, "_id": 0}
+        )
 
     # insert a Report object into a reports collection
-    mdb.reports.insert_one({
-        "reporter": user['userID'],
-        "reporter_ip": reporterUserIp['ip'],
-        "reported": reportedUserId,
-        "reported_ip": reportedUserIp['ip'],
-        "reason": body['reason'],
-        "room_id": roomObj['room']
-    })
+    mdb.reports.insert_one(
+        {
+            "reporter": user["user_id"],
+            "reporter_ip": reporter_user_ip["ip"],
+            "reported": reported_user_id,
+            "reported_ip": reported_user_ip["ip"],
+            "reason": body["reason"],
+            "room_id": room_obj["room"],
+        }
+    )
 
     # copy all message objs in reported conversation to the other collection
-    reportedConversation = mdb.messages.find({"room_id": roomObj['room']})
-    mdb.reported_messages.insert_many(list(reportedConversation))
+    reported_conversation = mdb.messages.find({"room_id": room_obj["room"]})
+    mdb.reported_messages.insert_many(list(reported_conversation))
     return success("conversation reported", 200)
 
-# delete userObj from all collections
-def delete_user_from_db(userObj):
-    mdb.userDetails.delete_one({'secret': userObj['secret']})
-    mdb.messages.delete_many({'author': userObj['userID']})
-    mdb.rooms.delete_one({'room': userObj['room']})
+
+# delete user_obj from all collections
+def delete_user_from_db(user_obj):
+    mdb.userDetails.delete_one({"secret": user_obj["secret"]})
+    mdb.messages.delete_many({"author": user_obj["user_id"]})
+    mdb.rooms.delete_one({"room": user_obj["room"]})
+
 
 # makes sure both users have left the room before removing from db
 # should only go in here if user closes tab or presses home if in room
 def check_users_in_room(room_id):
-    roomObj = mdb.rooms.find_one({'room': room_id})
-    if roomObj is None:
+    room_obj = mdb.rooms.find_one({"room": room_id})
+    if room_obj is None:
         print("bad room, not found")
         return
 
     # at least 1 user disconnected, so this is the 2nd user
-    if(roomObj['disconnected'] >= 1):
-        user1 = mdb.userDetails.find_one({'userID': roomObj['user1']})
-        user2 = mdb.userDetails.find_one({'userID': roomObj['user2']})
+    if room_obj["disconnected"] >= 1:
+        user1 = mdb.userDetails.find_one({"user_id": room_obj["user1"]})
+        user2 = mdb.userDetails.find_one({"user_id": room_obj["user2"]})
         delete_user_from_db(user1)
         delete_user_from_db(user2)
     else:
-        mdb.rooms.update_one({'room': room_id}, {"$set": {'disconnected': 1}})
+        mdb.rooms.update_one({"room": room_id}, {"$set": {"disconnected": 1}})
+
 
 # ====== SOCKET STUFF =====
 # socket event to have user actually join the room
-@socketio.on('join_room')
+@socketio.on("join_room")
 def user_join_room(secret):
-    userObj = mdb.userDetails.find_one({'secret': secret}) # fetch user from db
-    if userObj is None:
+    user_obj = mdb.userDetails.find_one({"secret": secret})  # fetch user
+    if user_obj is None:
         print("bad user not found")
         return
-    join_room(userObj['room'])
-    socketio.emit('user_connected', room=userObj['room'])
-    print (userObj['userID'] + ' has joined room ' + userObj['room'])
+    join_room(user_obj["room"])
+    socketio.emit("user_connected", room=user_obj["room"])
+    print(user_obj["user_id"] + " has joined room " + user_obj["room"])
 
-# associates a SocketIO session ID with a user object. This is called immediately after the user auths
-@socketio.on('hello')
+
+# associates a SocketIO session ID with a user object. This is called
+# immediately after the user auths
+@socketio.on("hello")
 def user_sid_assoc(secret):
-    user = mdb.userDetails.find_one({'secret': secret})  # fetch user from db
+    user = mdb.userDetails.find_one({"secret": secret})  # fetch user from db
     if user is None:
         print("user_sid_assoc: user not found")
         return
     # noinspection PyUnresolvedReferences
     # provided by socketio
     sid = request.sid
-    mdb.userDetails.update_one({'secret': secret}, {"$set": {"sid": sid}})
-    print("User {user['userID']} has socket session ID" + sid)
+    mdb.userDetails.update_one({"secret": secret}, {"$set": {"sid": sid}})
+    print("User {user['user_id']} has socket session ID" + sid)
+
 
 # user has left your channel
-@socketio.on('leave_room')
+@socketio.on("leave_room")
 def user_leave_room(secret):
-    userObj = mdb.userDetails.find_one({'secret': secret})  # fetch user from db
-    if userObj is None:
+    user_obj = mdb.userDetails.find_one({"secret": secret})  # fetch user
+    if user_obj is None:
         print("bad user not found")
         return
     # todo whatever teardown you need
-    leave_room(userObj['room'])
-    socketio.emit('user_disconnected', room=userObj['room'])
+    leave_room(user_obj["room"])
+    socketio.emit("user_disconnected", room=user_obj["room"])
     # delete these 2 users from messages, rooms, and queue
-    # delete_user_from_db(userObj) let's see if we can not remove users when they leave room, we need this info
-    check_users_in_room(userObj['room'])
-    print(userObj['userID'] + ' has left room ' + userObj['room'])
+    # delete_user_from_db(user_obj) let's see if we can not remove users when
+    # they leave room, we need this info
+    check_users_in_room(user_obj["room"])
+    print(user_obj["user_id"] + " has left room " + user_obj["room"])
 
-@socketio.on('disconnect')
-def user_disconnect(): # ensure that eventlet is installed!!
-    userObj = mdb.userDetails.find_one({'sid': request.sid})  # fetch user from db
-    if(userObj is None): # still not sure why this would happen but here's protection in case
+
+@socketio.on("disconnect")
+def user_disconnect():  # ensure that eventlet is installed!!
+    user_obj = mdb.userDetails.find_one({"sid": request.sid})  # fetch user
+    if (
+        user_obj is None
+    ):  # still not sure why this would happen but here's protection in case
         return
-    socketio.emit('user_disconnected', room=userObj['room'])
+    socketio.emit("user_disconnected", room=user_obj["room"])
 
     # check to see if user disconnected while in room or in a queue
-    if(userObj['queueType'] == "outQueue"):
-        check_users_in_room(userObj['room'])
+    if user_obj["queueType"] == "outQueue":
+        check_users_in_room(user_obj["room"])
     else:
-        delete_user_from_db(userObj)
+        delete_user_from_db(user_obj)
     print("yay user has been deleted")
-   
+
+
 # ===== MISC =====
 # register handlers and stuff
 errors.register_error_handlers(app)
 
+
+# checks if user is banned
+def is_banned(user_ip):
+    if mdb.bannedUsers.find_one({"ip": user_ip}) is None:
+        return False
+    else:
+        return True
+
 # ===== DEV ONLY ====
 
-def notify_queue_complete(user_id):
-    socketio.emit("queue_complete", {'user_id' : user_id[0]})
-    socketio.emit("queue_complete", {'user_id' : user_id[1]})
 
-def match_making(userIDs):
+def notify_queue_complete(user_id):
+    socketio.emit("queue_complete", {"user_id": user_id[0]})
+    socketio.emit("queue_complete", {"user_id": user_id[1]})
+
+
+def match_making(user_ids):
     roomID = str(uuid.uuid4())
-    user_ID1 = userIDs[0]
-    user_ID2 = userIDs[1]
-    mdb.rooms.insert_one({"room" : roomID, 'user1' : user_ID1, 'user2' : user_ID2, "disconnected": 0})
-    mdb.userDetails.update_one({"userID" : user_ID1}, {"$set": {'room': roomID, "queueType": "outQueue"}})
-    mdb.userDetails.update_one({"userID" : user_ID2}, {"$set": {'room': roomID, "queueType": "outQueue"}})
-    print("user " + user_ID1 + " and user " + user_ID2 + " have been assigned room " + roomID)
+    user_ID1 = user_ids[0]
+    user_ID2 = user_ids[1]
+    mdb.rooms.insert_one(
+        {"room": roomID, "user1": user_ID1, "user2": user_ID2,
+            "disconnected": 0}
+    )
+    mdb.userDetails.update_one(
+        {"user_id": user_ID1},
+        {"$set": {"room": roomID, "queueType": "outQueue"}}
+    )
+    mdb.userDetails.update_one(
+        {"user_id": user_ID2},
+        {"$set": {"room": roomID, "queueType": "outQueue"}}
+    )
+    print(
+        "user "
+        + user_ID1
+        + " and user "
+        + user_ID2
+        + " have been assigned room "
+        + roomID
+    )
+
 
 # enough time passes to go to fall back queue(talk)
 def find_time_difference(userTime):
-    difference = (time.time() - userTime)
-    return (int(difference) > 10)
+    difference = time.time() - userTime
+    return int(difference) > 10
+
 
 def change_vent_listen_to_talk(query):
     for x in query:
-        if(find_time_difference(x['time'])):
-            mdb.userDetails.update_one({"secret": x['secret']}, {
-                "$set": {"queueType": "talk"}})
+        if find_time_difference(x["time"]):
+            mdb.userDetails.update_one(
+                {"secret": x["secret"]}, {"$set": {"queueType": "talk"}}
+            )
+
 
 # matchs vent with listen (vice versa), matches talk with talk
 # keeps in one collection instead of multiple for each queueType
@@ -260,69 +340,78 @@ def change_vent_listen_to_talk(query):
 def check_queue():
     countVent = mdb.userDetails.count_documents({"queueType": "vent"})
     countListen = mdb.userDetails.count_documents({"queueType": "listen"})
-    
+
     # --------MATCH MAKING FOR VENT OR LISTEN----------
 
     # at least 1 person in either vent or listen
     if (countVent + countListen) > 0:
         # at least 1 person in vent AND listen, so match them
-        if(countVent >= 1 & countListen >= 1):
+        if countVent >= 1 & countListen >= 1:
             getVent = mdb.userDetails.find_one({"queueType": "vent"})
             getListen = mdb.userDetails.find_one({"queueType": "listen"})
-            
+
             # if someone leaves the queue at this moment
             # there might be a better way to write this case
-            if(getVent is None or getListen is None):
+            if getVent is None or getListen is None:
                 return
 
-            userIDs = []
-            userIDs.append(getVent['userID'])
-            userIDs.append(getListen['userID'])
+            user_ids = []
+            user_ids.append(getVent["user_id"])
+            user_ids.append(getListen["user_id"])
 
-            match_making(userIDs)
-            notify_queue_complete(userIDs)
+            match_making(user_ids)
+            notify_queue_complete(user_ids)
         # means 1 person or more in either vent/listen and no one in the other
         # checks if they been waiting too long and changes them to talk
         else:
-            if(countListen == 0): # no one in listen
-                queryVent = mdb.userDetails.find({"queueType": "vent"}, {"time": 1, "secret": 1, "_id": 0})
+            if countListen == 0:  # no one in listen
+                queryVent = mdb.userDetails.find(
+                    {"queueType": "vent"}, {"time": 1, "secret": 1, "_id": 0}
+                )
                 change_vent_listen_to_talk(queryVent)
-            else: # no one in vent
-                queryListen = mdb.userDetails.find({"queueType": "listen"}, {"time": 1, "secret": 1, "_id": 0})
+            else:  # no one in vent
+                queryListen = mdb.userDetails.find(
+                    {"queueType": "listen"}, {"time": 1, "secret": 1, "_id": 0}
+                )
                 change_vent_listen_to_talk(queryListen)
-            
+
     # ------------MATCH MAKING FOR TALK--------------
     # matchmaking for talk (same as isQueueReady)
     countTalk = mdb.userDetails.count_documents({"queueType": "talk"})
-    if(countTalk >= 2):
+    if countTalk >= 2:
         # this should find the first two people in the queue
         query = mdb.userDetails.find(
-                {"queueType": "talk"}, {"userID": 1, "secret": 1, "_id": 0}).limit(2)
-        userIDs = []
+            {"queueType": "talk"}, {"user_id": 1, "secret": 1, "_id": 0}
+        ).limit(2)
+        user_ids = []
         for x in query:
-            userIDs.append(x['userID'])
-        match_making(userIDs)
-        notify_queue_complete(userIDs) # pass user_id into notify_queue_complete()
+            user_ids.append(x["user_id"])
+        match_making(user_ids)
+        # pass user_id to notify_queue_complete()
+        notify_queue_complete(user_ids)
 
-# ---------------------MAKE SURE TO REMOVE THESE ON RELEASE-----------------------------
+
+# -----------------MAKE SURE TO REMOVE THESE ON RELEASE---------------------
 # deletes all documents in UserDetails
-@app.route('/deleteUserDetails')
+@app.route("/deleteUserDetails")
 def delete_user_details():
     mdb.userDetails.delete_many({})
     return "deleted all docs in userDetails"
 
-@app.route('/deleteRoomDetails')
+
+@app.route("/deleteRoomDetails")
 def delete_room_details():
     mdb.rooms.delete_many({})
     return "deleted all docs in rooms"
 
-@app.route('/deleteMessageDetails')
+
+@app.route("/deleteMessageDetails")
 def delete_message_details():
     mdb.messages.delete_many({})
     return "deleted all docs in messages"
 
 
-@app.route('/deleteAllDetails')
+@app.route("/deleteAllDetails")
 def delete_all_details():
     mdb.userDetails.delete_many({})
     mdb.rooms.delete_many({})
@@ -332,17 +421,19 @@ def delete_all_details():
     mdb.bannedUsers.delete_many({})
     return "all gone!"
 
-# APScheduler running in background 
+
+# APScheduler running in background
 scheduler.add_job(
     func=check_queue,
-    trigger="interval", 
+    trigger="interval",
     seconds=3,
-    id='check_is_queue_ready',
-    name='Check queue status every 3 seconds',
-    replace_existing=True)
+    id="check_is_queue_ready",
+    name="Check queue status every 3 seconds",
+    replace_existing=True,
+)
 scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     socketio.run(app, port=8000, host="0.0.0.0")
