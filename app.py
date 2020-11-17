@@ -151,7 +151,7 @@ def handle_report(body):
     """User reports conversation."""
     user = mdb.userDetails.find_one({"secret": body["secret"]})
     if user is None:
-        return error(403, "user who clicked on report not found")
+        return error(404, "user who clicked on report not found")
     room_obj = mdb.rooms.find_one({"room": user["room"]})
 
     if room_obj["user1"] == user["user_id"]:
@@ -251,9 +251,6 @@ def user_leave_room(secret):
     # todo whatever teardown you need
     leave_room(user_obj["room"])
     socketio.emit("user_disconnected", room=user_obj["room"])
-    # delete these 2 users from messages, rooms, and queue
-    # delete_user_from_db(user_obj) let's see if we can not remove users when
-    # they leave room, we need this info
     check_users_in_room(user_obj["room"])
     print(user_obj["user_id"] + " has left room " + user_obj["room"])
 
