@@ -18,3 +18,7 @@ pytz==2020.1
 six==1.15.0
 tzlocal==2.1
 Werkzeug==1.0.1
+
+# bot replier
+tensorflow==1.15
+gpt2-client

@@ -108,7 +108,7 @@ def handle_message(jsonObj):
 
     # if the user is banned, hand their message off to a bot
     # noinspection PyUnreachableCode
-    if False:  # todo: if user_is_banned()
+    if True:  # todo: if user_is_banned()
         bot.replier.schedule_reply_to_message(
             mdb,
             socketio,

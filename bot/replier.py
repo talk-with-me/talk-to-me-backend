@@ -3,8 +3,11 @@ import random
 import time
 
 from bson import ObjectId
+from gpt2_client import GPT2Client
 
 TYPING_SPEED = 60 / 500  # sec/char, based on average of 200cpm
+
+gpt2 = GPT2Client('117M')  # this depends on the model already being downloaded
 
 
 def schedule_reply_to_message(mdb, socketio, scheduler, content: str, room_id: str, user: dict):
@@ -43,4 +46,10 @@ def generate_reply(content: str):
     """
     Generates a reply to some message.
     """
-    return content  # currently, just echo
+    reply = gpt2.generate_batch_from_prompts([
+        f"You are a user talking to another user on a website designed for people to talk about their feelings.\n\n"
+        f"User: Hello.\n"
+        f"You: Hello! I am GPT-2.\n"
+        f"User: {content}\n"
+    ])
+    return reply[0]
