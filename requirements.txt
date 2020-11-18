@@ -21,4 +21,4 @@ Werkzeug==1.0.1
 
 # bot replier
 tensorflow==1.15
-gpt2-client
+gpt-2-simple

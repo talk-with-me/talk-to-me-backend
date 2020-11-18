@@ -3,16 +3,18 @@ FROM python:3.7
 
 # Copy over requirements
 COPY requirements.txt /requirements.txt
-COPY scripts /scripts
 
 # Install dependencies
 RUN pip3 install -r requirements.txt
 
+# build cache deps
+COPY . .
+
 # setup GPT-2
 RUN python scripts/setup-gpt2.py
 
-# build cache
-COPY . .
+# build cache GPT-2
+COPY models /models
 
 # RUNIT
 # ENTRYPOINT python3 app.py

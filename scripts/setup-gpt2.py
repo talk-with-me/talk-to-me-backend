@@ -1,8 +1,13 @@
 """
 Downloads the GPT-2 model for use in bot replies. Used in a build step to provide the model.
 """
-from gpt2_client import GPT2Client
+import os
+
+import gpt_2_simple as gpt2
+
+model_name = "124M"
 
 if __name__ == '__main__':
-    gpt2 = GPT2Client('117M')  # This could also be `345M`, `774M`, or `1558M`. Rename `save_dir` to anything.
-    gpt2.load_model(force_download=True)
+    if not os.path.isdir(os.path.join("models", model_name)):
+        print(f"Downloading {model_name} model...")
+        gpt2.download_gpt2(model_name=model_name)  # model is saved into current directory under /models/124M/
