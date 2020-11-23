@@ -20,5 +20,4 @@ tzlocal==2.1
 Werkzeug==1.0.1
 
 # bot replier
-tensorflow==1.15
-gpt-2-simple
+transformers[torch]
