@@ -25,6 +25,7 @@ def schedule_reply_to_message(mdb, socketio, scheduler, content: str, room_id: s
         history = get_ai_chat_history(mdb, user['sid'], history_len=1)
         reply_content, history_tensor = generate_reply(content, history)
         save_ai_chat_history(mdb, user['sid'], history_tensor, content, reply_content)
+        # time.sleep(TYPING_SPEED * len(reply_content))
         reply_to_message(socketio, reply_content, user['sid'])
 
     scheduler.add_job(do_reply,
