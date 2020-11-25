@@ -57,9 +57,6 @@ def user_auth():
         "sid": None,
     }
 
-    if is_banned(user_obj["ip"]):
-        user_obj["queueType"] = "banned"
-
     mdb.userDetails.insert_one(user_obj)
     return success(user_obj)
 
@@ -72,7 +69,11 @@ def request_queue(body):
         {"secret": body["secret"]}          # Fetches user from db
     )
     if user_object is not None:
-        if user_object["queueType"] == "banned":
+        if is_banned(user_object["ip"]):
+            mdb.userDetails.update_one(
+            {"secret": body["secret"]},
+            {"$set": {"queueType": "banned", "time": time.time()}},
+        )
             return success("sike, you banned")
         elif (user_object["queueType"] != "idle" or
                 user_object["room"] != "lonely"):
@@ -108,7 +109,7 @@ def handle_message(jsonObj):
 
     # if the user is banned, hand their message off to a bot
     # noinspection PyUnreachableCode
-    if True:  # todo: if user_is_banned()
+    if user_is_banned(user_obj):  # todo: if user_is_banned()
         bot.replier.schedule_reply_to_message(
             mdb,
             socketio,
@@ -248,10 +249,12 @@ def user_leave_room(secret):
     if user_obj is None:
         print("bad user not found")
         return
-    # todo whatever teardown you need
     leave_room(user_obj["room"])
     socketio.emit("user_disconnected", room=user_obj["room"])
-    check_users_in_room(user_obj["room"])
+    if(user_obj["queueType"] == "banned"):
+        delete_user_from_db(user_obj)
+    else:
+        check_users_in_room(user_obj["room"])
     print(user_obj["user_id"] + " has left room " + user_obj["room"])
 
 
@@ -278,6 +281,11 @@ def user_disconnect():  # ensure that eventlet is installed!!
 errors.register_error_handlers(app)
 
 # ===== DEV ONLY ====
+
+def user_is_banned(userObj):
+    if(userObj['queueType'] == "banned"):
+        return True
+    return False
 
 
 def is_banned(user_ip):
@@ -392,6 +400,13 @@ def check_queue():
         match_making(user_ids)
         # pass user_id to notify_queue_complete()
         notify_queue_complete(user_ids)
+
+    # ------------HANDLING BANNED USERS ---------------
+    countBanned = mdb.userDetails.count_documents({"queueType": "banned"})
+    if(countBanned >= 1):
+        user = mdb.userDetails.find_one({"queueType": "banned"}, {"user_id": 1, "secret": 1, "_id": 0})
+        user_id = user['user_id']
+        socketio.emit("queue_complete", {"user_id": user_id})
 
 
 # -----------------MAKE SURE TO REMOVE THESE ON RELEASE---------------------
