@@ -3,7 +3,7 @@
 
 # import flask stuff
 from flask import Flask, render_template, redirect, url_for, jsonify, \
-        request, Response
+    request, Response
 from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
@@ -68,7 +68,7 @@ def request_queue(body):
     print('queue received')
     """User chooses queueType."""
     user_object = mdb.userDetails.find_one(
-        {"secret": body["secret"]}          # Fetches user from db
+        {"secret": body["secret"]}  # Fetches user from db
     )
 
     if user_object is not None:
@@ -80,7 +80,7 @@ def request_queue(body):
             )
             return success("you have been placed in queue")
         elif (user_object["queueType"] != "idle" or
-                user_object["room"] != "lonely"):
+              user_object["room"] != "lonely"):
             return error(403, "nah you already in queue or in a room")
 
         mdb.userDetails.update_one(
@@ -257,7 +257,7 @@ def user_leave_room(secret):
         return
     leave_room(user_obj["room"])
     socketio.emit("user_disconnected", room=user_obj["room"])
-    if(user_obj["queueType"] == "banned"):
+    if (user_obj["queueType"] == "banned"):
         delete_user_from_db(user_obj)
     else:
         check_users_in_room(user_obj["room"])
@@ -269,7 +269,7 @@ def user_disconnect():  # ensure that eventlet is installed!!
     """User disconnects from app."""
     user_obj = mdb.userDetails.find_one({"sid": request.sid})  # fetch user
     if (
-        user_obj is None
+            user_obj is None
     ):  # still not sure why this would happen but here's protection in case
         return
     socketio.emit("user_disconnected", room=user_obj["room"])
@@ -285,6 +285,7 @@ def user_disconnect():  # ensure that eventlet is installed!!
 # ===== MISC =====
 # register handlers and stuff
 errors.register_error_handlers(app)
+
 
 # ===== DEV ONLY ====
 def ip_is_banned(user_ip):
@@ -308,7 +309,7 @@ def match_making(user_ids):
     user_ID2 = user_ids[1]
     mdb.rooms.insert_one(
         {"room": roomID, "user1": user_ID1, "user2": user_ID2,
-            "disconnected": 0}
+         "disconnected": 0}
     )
     mdb.userDetails.update_one(
         {"user_id": user_ID1},
