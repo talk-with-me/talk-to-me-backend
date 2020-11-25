@@ -3,7 +3,7 @@
 
 # import flask stuff
 from flask import Flask, render_template, redirect, url_for, jsonify, \
-        request, Response
+    request, Response
 from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
@@ -49,7 +49,7 @@ def user_auth():
     user_id = str(uuid.uuid4())
     user_secret = str(uuid.uuid4())
     user_obj = {
-        "ip": request.headers['X-Real-Ip'],
+        "ip": request.headers.get('X-Real-Ip', request.remote_addr),
         "user_id": user_id,
         "secret": user_secret,
         "queueType": "idle",
@@ -68,11 +68,11 @@ def request_queue(body):
     print('queue received')
     """User chooses queueType."""
     user_object = mdb.userDetails.find_one(
-        {"secret": body["secret"]}          # Fetches user from db
+        {"secret": body["secret"]}  # Fetches user from db
     )
 
     if user_object is not None:
-        if is_banned(user_object["ip"]):
+        if ip_is_banned(user_object["ip"]):
             print("user was placed in ban")
             mdb.userDetails.update_one(
                 {"secret": body["secret"]},
@@ -80,7 +80,7 @@ def request_queue(body):
             )
             return success("you have been placed in queue")
         elif (user_object["queueType"] != "idle" or
-                user_object["room"] != "lonely"):
+              user_object["room"] != "lonely"):
             return error(403, "nah you already in queue or in a room")
 
         mdb.userDetails.update_one(
@@ -111,11 +111,11 @@ def handle_message(jsonObj):
         "liked": False,
     }
 
-    print('Message from ' + request.headers['X-Real-Ip'])
+    print('Message from ' + user_obj['ip'])
     # if the user is banned, hand their message off to a bot
     # noinspection PyUnreachableCode
-    if is_banned(request.headers['X-Real-Ip']):  # todo: if user_is_banned()
-        print(request.headers['X-Real-Ip'] + ' IS BANNED, TALK TO THE BOT')
+    if ip_is_banned(user_obj['ip']):
+        print(user_obj['ip'] + ' IS BANNED, TALK TO THE BOT')
         bot.replier.schedule_reply_to_message(
             mdb,
             socketio,
@@ -255,10 +255,9 @@ def user_leave_room(secret):
     if user_obj is None:
         print("bad user not found")
         return
-    # todo whatever teardown you need
     leave_room(user_obj["room"])
     socketio.emit("user_disconnected", room=user_obj["room"])
-    if(user_obj["queueType"] == "banned"):
+    if (user_obj["queueType"] == "banned"):
         delete_user_from_db(user_obj)
     else:
         check_users_in_room(user_obj["room"])
@@ -270,7 +269,7 @@ def user_disconnect():  # ensure that eventlet is installed!!
     """User disconnects from app."""
     user_obj = mdb.userDetails.find_one({"sid": request.sid})  # fetch user
     if (
-        user_obj is None
+            user_obj is None
     ):  # still not sure why this would happen but here's protection in case
         return
     socketio.emit("user_disconnected", room=user_obj["room"])
@@ -287,9 +286,9 @@ def user_disconnect():  # ensure that eventlet is installed!!
 # register handlers and stuff
 errors.register_error_handlers(app)
 
-# ===== DEV ONLY ====
 
-def is_banned(user_ip):
+# ===== DEV ONLY ====
+def ip_is_banned(user_ip):
     """Checks if user is banned."""
     if mdb.bannedUsers.find_one({"ip": user_ip}) is None:
         return False
@@ -310,7 +309,7 @@ def match_making(user_ids):
     user_ID2 = user_ids[1]
     mdb.rooms.insert_one(
         {"room": roomID, "user1": user_ID1, "user2": user_ID2,
-            "disconnected": 0}
+         "disconnected": 0}
     )
     mdb.userDetails.update_one(
         {"user_id": user_ID1},
@@ -409,6 +408,10 @@ def check_queue():
         user = mdb.userDetails.find_one({"queueType": "banned"})
         user_id = user["user_id"]
         notify_queue_complete([user_id])
+        mdb.userDetails.update_one(
+            {"user_id": user_id},
+            {"$set": {"queueType": "outQueue"}}
+        )
 
 
 # -----------------MAKE SURE TO REMOVE THESE ON RELEASE---------------------
