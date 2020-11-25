@@ -49,7 +49,7 @@ def user_auth():
     user_id = str(uuid.uuid4())
     user_secret = str(uuid.uuid4())
     user_obj = {
-        "ip": request.headers['X-Real-Ip'],
+        "ip": request.headers.get('X-Real-Ip', request.remote_addr),
         "user_id": user_id,
         "secret": user_secret,
         "queueType": "idle",
@@ -111,11 +111,11 @@ def handle_message(jsonObj):
         "liked": False,
     }
 
-    print('Message from ' + request.headers['X-Real-Ip'])
+    print('Message from ' + user_obj['ip'])
     # if the user is banned, hand their message off to a bot
     # noinspection PyUnreachableCode
-    if ip_is_banned(request.headers['X-Real-Ip']):
-        print(request.headers['X-Real-Ip'] + ' IS BANNED, TALK TO THE BOT')
+    if ip_is_banned(user_obj['ip']):
+        print(user_obj['ip'] + ' IS BANNED, TALK TO THE BOT')
         bot.replier.schedule_reply_to_message(
             mdb,
             socketio,
