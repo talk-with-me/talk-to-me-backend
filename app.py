@@ -258,7 +258,10 @@ def user_leave_room(secret):
     # todo whatever teardown you need
     leave_room(user_obj["room"])
     socketio.emit("user_disconnected", room=user_obj["room"])
-    check_users_in_room(user_obj["room"])
+    if(user_obj["queueType"] == "banned"):
+        delete_user_from_db(user_obj)
+    else:
+        check_users_in_room(user_obj["room"])
     print(user_obj["user_id"] + " has left room " + user_obj["room"])
 
 
@@ -403,13 +406,9 @@ def check_queue():
     # matchmaking for banned
     countReport = mdb.userDetails.count_documents({"queueType": "banned"})
     if countReport >= 1:
-        query = mdb.userDetails.find({"queueType": "banned"})
-        user_id = query[0]["user_id"]
+        user = mdb.userDetails.find_one({"queueType": "banned"})
+        user_id = user["user_id"]
         notify_queue_complete([user_id])
-        mdb.userDetails.update_one(
-        {"user_id": user_id},
-        {"$set": {"queueType": "outQueue"}}
-        )
 
 
 # -----------------MAKE SURE TO REMOVE THESE ON RELEASE---------------------
