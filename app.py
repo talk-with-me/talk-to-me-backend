@@ -42,13 +42,14 @@ scheduler = BackgroundScheduler()
 # ===== REST =====
 @app.route("/auth", methods=["GET"])
 def user_auth():
+    print('auth received')
     """Generates an id and secret for the user, stores them and returns them
     to user.
     """
     user_id = str(uuid.uuid4())
     user_secret = str(uuid.uuid4())
     user_obj = {
-        "ip": request.remote_addr,
+        "ip": request.headers['X-Real-Ip'],
         "user_id": user_id,
         "secret": user_secret,
         "queueType": "idle",
@@ -64,17 +65,20 @@ def user_auth():
 @app.route("/queue", methods=["POST"])
 @expect_json(secret=str, queueType=str)
 def request_queue(body):
+    print('queue received')
     """User chooses queueType."""
     user_object = mdb.userDetails.find_one(
         {"secret": body["secret"]}          # Fetches user from db
     )
+
     if user_object is not None:
-        if is_banned(user_object["ip"]):
+        if ip_is_banned(user_object["ip"]):
+            print("user was placed in ban")
             mdb.userDetails.update_one(
-            {"secret": body["secret"]},
-            {"$set": {"queueType": "banned", "time": time.time()}},
-        )
-            return success("sike, you banned")
+                {"secret": body["secret"]},
+                {"$set": {"queueType": "banned", "time": time.time()}},
+            )
+            return success("you have been placed in queue")
         elif (user_object["queueType"] != "idle" or
                 user_object["room"] != "lonely"):
             return error(403, "nah you already in queue or in a room")
@@ -107,9 +111,10 @@ def handle_message(jsonObj):
         "liked": False,
     }
 
+    print('Message from ' + request.headers['X-Real-Ip'])
     # if the user is banned, hand their message off to a bot
     # noinspection PyUnreachableCode
-    if user_is_banned(user_obj):  # todo: if user_is_banned()
+    if user_is_banned(user_obj):
         bot.replier.schedule_reply_to_message(
             mdb,
             socketio,
@@ -281,14 +286,13 @@ def user_disconnect():  # ensure that eventlet is installed!!
 errors.register_error_handlers(app)
 
 # ===== DEV ONLY ====
-
 def user_is_banned(userObj):
     if(userObj['queueType'] == "banned"):
         return True
     return False
 
 
-def is_banned(user_ip):
+def ip_is_banned(user_ip):
     """Checks if user is banned."""
     if mdb.bannedUsers.find_one({"ip": user_ip}) is None:
         return False
@@ -297,9 +301,9 @@ def is_banned(user_ip):
 
 
 def notify_queue_complete(user_id):
-    """Broadcast that room is ready to be joined for two users."""
-    socketio.emit("queue_complete", {"user_id": user_id[0]})
-    socketio.emit("queue_complete", {"user_id": user_id[1]})
+    """Broadcast that room is ready to be joined for users."""
+    for user in user_id:
+        socketio.emit("queue_complete", {"user_id": user})
 
 
 def match_making(user_ids):
@@ -401,12 +405,13 @@ def check_queue():
         # pass user_id to notify_queue_complete()
         notify_queue_complete(user_ids)
 
-    # ------------HANDLING BANNED USERS ---------------
-    countBanned = mdb.userDetails.count_documents({"queueType": "banned"})
-    if(countBanned >= 1):
-        user = mdb.userDetails.find_one({"queueType": "banned"}, {"user_id": 1, "secret": 1, "_id": 0})
-        user_id = user['user_id']
-        socketio.emit("queue_complete", {"user_id": user_id})
+    # ------------MATCH MAKING FOR BANNED USERS--------------
+    # matchmaking for banned
+    countReport = mdb.userDetails.count_documents({"queueType": "banned"})
+    if countReport >= 1:
+        user = mdb.userDetails.find_one({"queueType": "banned"})
+        user_id = user["user_id"]
+        notify_queue_complete([user_id])
 
 
 # -----------------MAKE SURE TO REMOVE THESE ON RELEASE---------------------
