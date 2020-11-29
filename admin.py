@@ -48,13 +48,18 @@ def get_reported_messages(body):
 def ban_user(body):
     report = mdb.reports.find_one({'room_id' : body['room_id']})
     reported_user_ip = report['reported_ip']
+    
+    check = mdb.bannedUsers.count_documents({'ip' : reported_user_ip})
+    if (check >= 1):
+        return success("User already banned")
+
     ban_object = {
         "ip" : reported_user_ip,
         "reason" : body['reason'],
-        "date" : datetime.date.today()
+        "date" : str(datetime.date.today())
     }
-    mdb.bannedUsers.add(ban_object)
-    return success(200, "Reported user banned")
+    mdb.bannedUsers.insert_one(ban_object)
+    return success("Reported user banned")
 
 @app.route("/bannedusers", methods=["GET"])
 def get_banned_users():
@@ -70,7 +75,7 @@ def get_banned_users():
 @expect_json(ip=str)
 def unban_user(body):
     mdb.bannedUsers.delete_one({"ip" : body['ip']})
-    return success(200, "User unbanned")
+    return success("User unbanned")
 
 if __name__ == "__main__":
     app.run(port=6000, host="0.0.0.0")
