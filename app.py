@@ -259,6 +259,8 @@ def user_leave_room(secret):
     socketio.emit("user_disconnected", room=user_obj["room"])
     if (user_obj["queueType"] == "banned"):
         delete_user_from_db(user_obj)
+    elif (user_obj["room"] == "lonely"):
+        delete_user_from_db(user_obj)
     else:
         check_users_in_room(user_obj["room"])
     print(user_obj["user_id"] + " has left room " + user_obj["room"])
