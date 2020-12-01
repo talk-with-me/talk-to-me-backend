@@ -22,6 +22,14 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated_function
 
+@admin.route("/auth", methods=["POST"])
+@expect_json(password=str)
+def admin_auth(body):
+    if(body['password'] == "ttmadmin"):
+        auth_token = {"authorization" : "ttmadmin"}
+        return success(auth_token)
+    return error(403, "Incorrect password")
+
 # http://127.0.0.1:8000/admin/hello
 @admin.route("/hello")
 def hello():
