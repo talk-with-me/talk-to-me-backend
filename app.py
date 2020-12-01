@@ -4,6 +4,7 @@
 # import flask stuff
 from flask import Flask, render_template, redirect, url_for, jsonify, \
     request, Response
+from admin import admin
 from flask_cors import CORS
 from flask_socketio import SocketIO, send, join_room, leave_room
 from flask_pymongo import PyMongo
@@ -34,7 +35,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "ttm"
 CORS(app)
-mdb = MongoClient(db.MONGO_URL).db
+app.mdb = mdb = MongoClient(db.MONGO_URL).db
 socketio = SocketIO(app, cors_allowed_origins="*")
 scheduler = BackgroundScheduler()
 
@@ -460,6 +461,9 @@ scheduler.add_job(
 scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
+
+
+app.register_blueprint(admin, url_prefix="/admin")
 
 if __name__ == "__main__":
     socketio.run(app, port=8000, host="0.0.0.0")
