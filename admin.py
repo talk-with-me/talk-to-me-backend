@@ -30,11 +30,6 @@ def admin_auth(body):
         return success(auth_token)
     return error(403, "Incorrect password")
 
-# http://127.0.0.1:8000/admin/hello
-@admin.route("/hello")
-def hello():
-    return "I think this blueprint works"
-
 @admin.route("/reports", methods=["GET"])
 @requires_auth
 def get_reports():
