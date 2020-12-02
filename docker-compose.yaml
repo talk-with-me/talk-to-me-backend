@@ -10,6 +10,7 @@ services:
       - mongo-express
     environment:
       MONGO_URL: "mongodb://twmadmin:twm999@mongo:27017"
+      ADMIN_PASS: "ttmadmin"
     ports:
       - 8000:8000
 

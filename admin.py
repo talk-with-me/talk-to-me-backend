@@ -5,6 +5,7 @@ from flask_pymongo import PyMongo
 from pymongo import MongoClient
 
 import db
+import os
 import json
 import datetime
 from bson import json_util, ObjectId
@@ -17,7 +18,7 @@ def requires_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         token = request.headers.get('authorization')
-        if(token != "ttmadmin"):
+        if(token != os.getenv('ADMIN_PASS')):
             return error(403, "Unauthorized")
         return f(*args, **kwargs)
     return decorated_function
@@ -38,8 +39,7 @@ def get_reports():
     for x in reports:
         x['_id'] = str(x['_id'])
         data.append(x)
-    jsonData = json.dumps(data)
-    return success(jsonData)
+    return success(data)
 
 @admin.route("/reports/<room_id>/messages", methods=["GET"])
 @requires_auth
@@ -49,8 +49,7 @@ def get_reported_messages(room_id):
     for x in conversation:
         x['_id'] = str(x['_id'])
         data.append(x)
-    jsonData=json.dumps(data)
-    return success(jsonData)
+    return success(data)
 
 @admin.route("/banuser", methods=["POST"])
 @requires_auth
@@ -79,8 +78,7 @@ def get_banned_users():
     for x in banned_users:
         x['_id'] = str(x['_id'])
         data.append(x)
-    jsonData=json.dumps(data)
-    return success(jsonData)
+    return success(data)
 
 @admin.route("/unbanuser", methods=["POST"])
 @requires_auth
