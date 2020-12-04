@@ -232,6 +232,7 @@ def user_sid_assoc(secret):
     # noinspection PyUnresolvedReferences
     # provided by socketio
     sid = request.sid
+    mdb.userDetails.delete_many({"sid": sid, "secret": {"$ne": secret}})  # remove existing users with same sid
     mdb.userDetails.update_one({"secret": secret}, {"$set": {"sid": sid}})
     print("User {user['user_id']} has socket session ID" + sid)
 
