@@ -1,35 +1,22 @@
 # app,py - main file for talk-to-me backend
 # TADAA, Oct 2020
 
-# import flask stuff
-from flask import Flask, render_template, redirect, url_for, jsonify, \
-    request, Response
-from admin import admin
-from flask_cors import CORS
-from flask_socketio import SocketIO, send, join_room, leave_room
-from flask_pymongo import PyMongo
+import atexit
+import time
+import uuid
 
-# import config
+from apscheduler.schedulers.background import BackgroundScheduler
+from bson import ObjectId
+from flask import Flask, request
+from flask_cors import CORS
+from flask_socketio import SocketIO, join_room, leave_room
 from pymongo import MongoClient
 
-# import general stuff
+import bot.replier
 import db
-import os
-import sys
-import uuid
-import time
-import json
-import random
-import atexit
-import datetime
-from bson import json_util, ObjectId
+from admin import admin
 from lib import errors
 from lib.utils import clean_json, error, expect_json, success
-import bot.replier
-
-# import async stuff
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 
 # start app
 app = Flask(__name__)
@@ -463,7 +450,6 @@ scheduler.add_job(
 scheduler.start()
 # Shut down the scheduler when exiting the app
 atexit.register(lambda: scheduler.shutdown())
-
 
 app.register_blueprint(admin, url_prefix="/admin")
 
