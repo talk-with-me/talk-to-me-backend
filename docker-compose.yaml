@@ -11,6 +11,7 @@ services:
     environment:
       MONGO_URL: "mongodb://twmadmin:twm999@mongo:27017"
       ADMIN_PASS: "ttmadmin"
+      JWT_SECRET: "ttmadmin"
     ports:
       - 8000:8000
 
