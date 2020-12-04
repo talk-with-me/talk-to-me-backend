@@ -52,8 +52,7 @@ def get_reports():
     for x in reports:
         x['_id'] = str(x['_id'])
         data.append(x)
-    jsonData = json.dumps(data)
-    return success(jsonData)
+    return success(data)
 
 @admin.route("/reports/<room_id>/messages", methods=["GET"])
 @requires_auth
@@ -63,8 +62,7 @@ def get_reported_messages(room_id):
     for x in conversation:
         x['_id'] = str(x['_id'])
         data.append(x)
-    jsonData=json.dumps(data)
-    return success(jsonData)
+    return success(data)
 
 @admin.route("/banuser", methods=["POST"])
 @requires_auth
@@ -93,8 +91,7 @@ def get_banned_users():
     for x in banned_users:
         x['_id'] = str(x['_id'])
         data.append(x)
-    jsonData=json.dumps(data)
-    return success(jsonData)
+    return success(data)
 
 @admin.route("/unbanuser", methods=["POST"])
 @requires_auth
