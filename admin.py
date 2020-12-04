@@ -6,30 +6,43 @@ from pymongo import MongoClient
 
 import db
 import os
+import jwt
 import json
+import base64
 import datetime
 from bson import json_util, ObjectId
 from lib import errors
 from lib.utils import clean_json, error, expect_json, success
 
 admin = Blueprint('admin', __name__)
+jwt_secret = os.environ['JWT_SECRET']
 
+# -------- AUTH STUFF --------
 def requires_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        token = request.headers.get('authorization')
-        if(token != os.getenv('ADMIN_PASS')):
-            return error(403, "Unauthorized")
-        return f(*args, **kwargs)
+        try:
+            encoded_jwt = request.headers.get('authorization')
+            if(validate_jwt(encoded_jwt)):
+                return f(*args, **kwargs)
+            return error(403, "not cool enough for this club")
+        except:
+            return error(403, "missing credentials")
     return decorated_function
 
 @admin.route("/auth", methods=["POST"])
 @expect_json(password=str)
 def admin_auth(body):
     if(body['password'] == "ttmadmin"):
-        auth_token = {"authorization" : "ttmadmin"}
+        auth_token = {"authorization" : generate_jwt()}
         return success(auth_token)
     return error(403, "Incorrect password")
+
+# -------- ADMIN ENDPOINTS --------
+# http://127.0.0.1:8000/admin/hello
+@admin.route("/hello")
+def hello():
+    return "I think this blueprint works"
 
 @admin.route("/reports", methods=["GET"])
 @requires_auth
@@ -86,3 +99,19 @@ def get_banned_users():
 def unban_user(body):
     current_app.mdb.bannedUsers.delete_one({"ip" : body['ip']})
     return success("User unbanned")
+
+# -------- MISC --------
+def generate_jwt():
+    encoded_jwt = jwt.encode({
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
+        'issued_time': datetime.datetime.utcnow().timestamp()
+        }, jwt_secret)
+    return base64.b64encode(encoded_jwt).decode('ascii')
+
+def validate_jwt(encoded_jwt):
+    try:
+        encoded_jwt_bytes = base64.b64decode(encoded_jwt)
+        jwt.decode(encoded_jwt_bytes, jwt_secret)
+        return True
+    except:
+        return False
