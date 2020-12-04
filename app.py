@@ -244,8 +244,9 @@ def user_leave_room(secret):
     if user_obj is None:
         print("bad user not found")
         return
-    leave_room(user_obj["room"])
-    socketio.emit("user_disconnected", room=user_obj["room"])
+    if user_obj['room'] != 'lonely':  # only emit if the user is in a room
+        leave_room(user_obj["room"])
+        socketio.emit("user_disconnected", room=user_obj["room"])
     if (user_obj["queueType"] == "banned"):
         delete_user_from_db(user_obj)
     elif (user_obj["room"] == "lonely"):
@@ -259,11 +260,11 @@ def user_leave_room(secret):
 def user_disconnect():  # ensure that eventlet is installed!!
     """User disconnects from app."""
     user_obj = mdb.userDetails.find_one({"sid": request.sid})  # fetch user
-    if (
-            user_obj is None
-    ):  # still not sure why this would happen but here's protection in case
+    if user_obj is None:  # still not sure why this would happen but here's protection in case
         return
-    socketio.emit("user_disconnected", room=user_obj["room"])
+
+    if user_obj['room'] != 'lonely':  # only emit if the user is in a room
+        socketio.emit("user_disconnected", room=user_obj["room"])
 
     # check to see if user disconnected while in room or in a queue
     if user_obj["queueType"] == "outQueue":
