@@ -4,6 +4,7 @@ import os
 from functools import wraps
 
 import jwt
+from bson import ObjectId
 from flask import Blueprint, current_app, request
 
 from lib.utils import error, expect_json, success
@@ -67,9 +68,9 @@ def get_reported_messages(room_id):
 
 @admin.route("/banuser", methods=["POST"])
 @requires_auth
-@expect_json(room_id=str, reason=str)
+@expect_json(report_id=str, reason=str)
 def ban_user(body):
-    report = current_app.mdb.reports.find_one({'room_id': body['room_id']})
+    report = current_app.mdb.reports.find_one({'_id': ObjectId(body['report_id'])})
     reported_user_ip = report['reported_ip']
 
     check = current_app.mdb.bannedUsers.count_documents({'ip': reported_user_ip})
