@@ -17,13 +17,14 @@ jwt_secret = os.environ['JWT_SECRET']
 def requires_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        encoded_jwt = ''
         try:
             encoded_jwt = request.headers.get('authorization')
-            if (validate_jwt(encoded_jwt)):
-                return f(*args, **kwargs)
-            return error(403, "not cool enough for this club")
         except:
             return error(403, "missing credentials")
+        if (validate_jwt(encoded_jwt)):
+            return f(*args, **kwargs)
+        return error(403, "not cool enough for this club")
 
     return decorated_function
 
