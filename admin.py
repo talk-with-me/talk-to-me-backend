@@ -17,12 +17,10 @@ jwt_secret = os.environ['JWT_SECRET']
 def requires_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        encoded_jwt = ''
-        try:
-            encoded_jwt = request.headers.get('authorization')
-        except:
+        encoded_jwt = request.headers.get('authorization')
+        if encoded_jwt is None:
             return error(403, "missing credentials")
-        if (validate_jwt(encoded_jwt)):
+        if validate_jwt(encoded_jwt):
             return f(*args, **kwargs)
         return error(403, "not cool enough for this club")
 
@@ -32,19 +30,13 @@ def requires_auth(f):
 @admin.route("/auth", methods=["POST"])
 @expect_json(password=str)
 def admin_auth(body):
-    if (body['password'] == "ttmadmin"):
+    if body['password'] == "ttmadmin":
         auth_token = {"authorization": generate_jwt()}
         return success(auth_token)
     return error(403, "Incorrect password")
 
 
 # -------- ADMIN ENDPOINTS --------
-# http://127.0.0.1:8000/admin/hello
-@admin.route("/hello")
-def hello():
-    return "I think this blueprint works"
-
-
 @admin.route("/reports", methods=["GET"])
 @requires_auth
 def get_reports():
@@ -120,5 +112,5 @@ def validate_jwt(encoded_jwt):
         encoded_jwt_bytes = base64.b64decode(encoded_jwt)
         jwt.decode(encoded_jwt_bytes, jwt_secret)
         return True
-    except:
+    except jwt.DecodeError:
         return False
