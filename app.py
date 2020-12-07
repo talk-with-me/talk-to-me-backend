@@ -232,7 +232,8 @@ def user_sid_assoc(secret):
     # noinspection PyUnresolvedReferences
     # provided by socketio
     sid = request.sid
-    mdb.userDetails.delete_many({"sid": sid, "secret": {"$ne": secret}})  # remove existing users with same sid
+    # remove existing users with same sid
+    mdb.userDetails.delete_many({"sid": sid, "secret": {"$ne": secret}})
     mdb.userDetails.update_one({"secret": secret}, {"$set": {"sid": sid}})
     print("User {user['user_id']} has socket session ID" + sid)
 
@@ -260,7 +261,7 @@ def user_leave_room(secret):
 def user_disconnect():  # ensure that eventlet is installed!!
     """User disconnects from app."""
     user_obj = mdb.userDetails.find_one({"sid": request.sid})  # fetch user
-    if user_obj is None:  # still not sure why this would happen but here's protection in case
+    if user_obj is None:
         return
 
     if user_obj['room'] != 'lonely':  # only emit if the user is in a room
