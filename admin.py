@@ -103,14 +103,13 @@ def generate_jwt():
     encoded_jwt = jwt.encode({
         'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
         'issued_time': datetime.datetime.utcnow().timestamp()
-    }, jwt_secret)
-    return base64.b64encode(encoded_jwt).decode('ascii')
+    }, jwt_secret).decode()
+    return encoded_jwt
 
 
 def validate_jwt(encoded_jwt):
     try:
-        encoded_jwt_bytes = base64.b64decode(encoded_jwt)
-        jwt.decode(encoded_jwt_bytes, jwt_secret)
+        jwt.decode(encoded_jwt, jwt_secret)
         return True
     except jwt.DecodeError:
         return False
