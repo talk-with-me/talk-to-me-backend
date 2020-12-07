@@ -67,7 +67,7 @@ def ban_user(body):
     reported_user_ip = report['reported_ip']
 
     check = current_app.mdb.bannedUsers.count_documents({'ip': reported_user_ip})
-    if (check >= 1):
+    if check >= 1:
         return success("User already banned")
 
     ban_object = {
