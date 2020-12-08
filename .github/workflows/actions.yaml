@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.7'
       - name: fix pip
-        run: python -m pip install --user --upgrade pip
+        run: pip install wheel
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
       - run: pip install pytest requests socketio
