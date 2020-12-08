@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.7'
       - name: fix pip
-        run: pip install python-dotenv
+        run: python -m pip install --upgrade setuptools
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
       - run: pip install pytest requests socketio
