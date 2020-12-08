@@ -13,6 +13,10 @@ jobs:
   main_test:
     runs-on: ubuntu-latest
     steps:
+      - name: setup python3.7
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
       - run: pip install pytest requests
