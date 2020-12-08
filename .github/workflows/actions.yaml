@@ -17,6 +17,8 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: '3.7'
+      - name: fix pip
+        run: python -m ensurepip --upgrade
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
       - run: pip install pytest requests socketio
