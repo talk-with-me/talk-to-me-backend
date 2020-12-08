@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.7'
       - name: fix pip
-        run: apt-get install pip3 -y
+        run: sudo apt-get install pip3 -y
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
       - run: pip3 install pytest requests socketio
