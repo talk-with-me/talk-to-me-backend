@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
-      - run: pip install pytest requests
+      - run: pip install pytest requests socketio
       - name: compose the docker stack
         run: docker-compose up --build -d
       - name: run tests
