@@ -9,11 +9,17 @@ requests.get('http://localhost:8000')
 
 user1_connected = [False]
 user2_connected = [False]
+user3_connected = [False]
+user4_connected = [False]
 
 user1_socket = socketio.Client()
 user2_socket = socketio.Client()
+user3_socket = socketio.Client()
+user4_socket = socketio.Client()
 user1_socket.connect('http://localhost:8000')
 user2_socket.connect('http://localhost:8000')
+user3_socket.connect('http://localhost:8000')
+user4_socket.connect('http://localhost:8000')
 
 @user1_socket.on('queue_complete')
 def on_receive_complete_user1(user):
@@ -29,6 +35,20 @@ def on_receive_complete_user2(user):
     if user['user_id'] == user2['user_id']:
         user2_connected[0] = True
         print('user_2 got placed in a room', user2_connected)
+
+@user3_socket.on('queue_complete')
+def on_receive_complete_user3(user):
+    print(user, user['user_id'], 'user3: ' + user3['user_id'], user['user_id'] == user3['user_id'])
+    if user['user_id'] == user3['user_id']:
+        user3_connected[0] = True
+        print('user_2 got placed in a room', user3_connected)
+
+@user4_socket.on('queue_complete')
+def on_receive_complete_user4(user):
+    print(user, user['user_id'], 'user4: ' + user4['user_id'], user['user_id'] == user4['user_id'])
+    if user['user_id'] == user4['user_id']:
+        user4_connected[0] = True
+        print('user_2 got placed in a room', user4_connected)
 
 user1 = ''
 user2 = ''
@@ -87,8 +107,18 @@ def test_good_enqueue_talk():
     assert(r1.status_code == 200)
     assert(r2.status_code == 200)
 
-def test_two_users_in_vent_get_placed_in_room():
-    print('testing matchmaking')
+def test_two_users_in_talk_and_vent_get_placed_in_room():
+    print('testing talk and vent matchmaking')
+
+    while not user3_connected[0] or not user4_connected[0]:
+        print('not connected', user3_connected, user4_connected)
+        time.sleep(1)
+
+    user3_socket.disconnect()
+    user4_socket.disconnect()
+
+def test_two_users_in_listen_get_placed_in_room():
+    print('testing listen matchmaking')
 
     while not user1_connected[0] or not user2_connected[0]:
         print('not connected', user1_connected, user2_connected)
