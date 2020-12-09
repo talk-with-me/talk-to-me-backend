@@ -25,5 +25,5 @@ jobs:
       - name: compose the docker stack
         run: docker-compose up --build -d
       - name: run tests
-        run: python -m pytest tests
+        run: python -m pytest tests -s
 
