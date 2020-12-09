@@ -12,6 +12,11 @@ user2_connected = [False]
 user3_connected = [False]
 user4_connected = [False]
 
+user1_received_messages = []
+user2_received_messages = []
+user3_received_messages = []
+user4_received_messages = []
+
 user1_socket = socketio.Client()
 user2_socket = socketio.Client()
 user3_socket = socketio.Client()
@@ -23,6 +28,7 @@ user4_socket.connect('http://localhost:8000')
 
 @user1_socket.on('queue_complete')
 def on_receive_complete_user1(user):
+    user1_socket.emit('join_room', user1['secret'])
     print(user, user['user_id'], 'user1: ' + user1['user_id'], user['user_id'] == user1['user_id'])
     if user['user_id'] == user1['user_id']:
         user1_connected[0] = True
@@ -31,6 +37,7 @@ def on_receive_complete_user1(user):
 
 @user2_socket.on('queue_complete')
 def on_receive_complete_user2(user):
+    user2_socket.emit('join_room', user2['secret'])
     print(user, user['user_id'], 'user2: ' + user2['user_id'], user['user_id'] == user2['user_id'])
     if user['user_id'] == user2['user_id']:
         user2_connected[0] = True
@@ -38,17 +45,39 @@ def on_receive_complete_user2(user):
 
 @user3_socket.on('queue_complete')
 def on_receive_complete_user3(user):
+    user3_socket.emit('join_room', user3['secret'])
     print(user, user['user_id'], 'user3: ' + user3['user_id'], user['user_id'] == user3['user_id'])
     if user['user_id'] == user3['user_id']:
         user3_connected[0] = True
-        print('user_2 got placed in a room', user3_connected)
+        print('user_3 got placed in a rjom', user3_connected)
 
 @user4_socket.on('queue_complete')
 def on_receive_complete_user4(user):
+    user4_socket.emit('join_room', user4['secret'])
     print(user, user['user_id'], 'user4: ' + user4['user_id'], user['user_id'] == user4['user_id'])
     if user['user_id'] == user4['user_id']:
         user4_connected[0] = True
-        print('user_2 got placed in a room', user4_connected)
+        print('user_4 got placed in a room', user4_connected)
+
+@user1_socket.on('send_message_to_client')
+def on_receive_complete_user1(message):
+    user1_received_messages.append(message)
+    print('user1 received message:', message)
+
+@user2_socket.on('send_message_to_client')
+def on_receive_complete_user2(message):
+    user2_received_messages.append(message)
+    print('user2 received message:', message, len(user2_received_messages))
+
+@user3_socket.on('send_message_to_client')
+def on_receive_complete_user3(message):
+    user3_received_messages.append(message)
+    print('user3 received message:', message)
+
+@user4_socket.on('send_message_to_client')
+def on_receive_complete_user4(message):
+    user4_received_messages.append(message)
+    print('user4 received message:', message)
 
 user1 = ''
 user2 = ''
@@ -122,6 +151,19 @@ def test_two_users_in_listen_get_placed_in_room():
 
     while not user1_connected[0] or not user2_connected[0]:
         print('not connected', user1_connected, user2_connected)
+        time.sleep(1)
+
+def test_sending_messages():
+    print('testing sending messages')
+    r1 = requests.post('http://localhost:8000/messages', json={'secret':user1['secret'], 'message':'hello1', 'nonce':'nunce'})
+    print(r1.json())
+    assert(r1.status_code == 201)
+
+def test_receiving_messages():
+    print('testing receiving messages')
+    global user2_received_message
+    while len(user2_received_messages) < 1:
+        print('user2 not received message')
         time.sleep(1)
 
     user1_socket.disconnect()
