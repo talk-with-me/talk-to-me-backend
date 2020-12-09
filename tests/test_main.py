@@ -4,6 +4,9 @@ import pytest
 import requests
 import socketio
 
+# wait for server to start up
+requests.get('http://localhost:8000')
+
 user1_connected = [False]
 user2_connected = [False]
 
