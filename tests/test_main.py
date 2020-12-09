@@ -7,25 +7,31 @@ import socketio
 user = ''
 
 def test_get_auth():
+    print('testing get auth')
     global user
     r = requests.get('http://localhost:8000/auth')
     user = r.json()['data']
     assert(r.status_code == 200)
 
 def test_bad_enqueue_bad_secret():
+    print('testing enqueue bad secret')
+    global user
     r = requests.post('http://localhost:8000/queue', json={'secret':'fender', 'queueType':'vent'})
     assert(r.status_code == 403)
 
 def test_bad_enqueue_no_queue_type():
+    print('testing enqueue bad enqueue type')
     r = requests.post('http://localhost:8000/queue', json={'secret':user['secret']})
     assert(r.status_code == 400)
 
 def test_good_enqueue_vent():
+    print('testing good enqueue')
     global user
     r = requests.post('http://localhost:8000/queue', json={'secret':user['secret'], 'queueType':'vent'})
     assert(r.status_code == 200)
 
 def test_two_users_in_vent_get_placed_in_room():
+    print('testing matchmaking')
     user1_connected = [False]
     user2_connected = [False]
     user1 = requests.get('http://localhost:8000/auth').json()['data']
@@ -45,7 +51,8 @@ def test_two_users_in_vent_get_placed_in_room():
             #user1_socket.emit('join_room', user1['secret'])
 
     @user2_socket.on('queue_complete')
-    def on_receive_complete_user1(user):
+    def on_receive_complete_user2(user):
+        print(user, user['user_id'], 'user2: ' + user2['user_id'], user['user_id'] == user2['user_id'])
         if user['user_id'] == user2['user_id']:
             user2_connected[0] = True
             print('user_2 got placed in a room', user2_connected)
