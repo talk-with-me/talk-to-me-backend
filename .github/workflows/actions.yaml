@@ -13,11 +13,17 @@ jobs:
   main_test:
     runs-on: ubuntu-latest
     steps:
+      - name: setup python3.7
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+      - name: fix pip
+        run: pip install wheel
       - name: copy stuff from repo to worker directory
         uses: actions/checkout@v1
-      - run: pip install pytest requests
+      - run: pip install pytest requests "python-socketio==4.6.1"
       - name: compose the docker stack
         run: docker-compose up --build -d
       - name: run tests
-        run: python -m pytest tests
+        run: python -m pytest tests -s
 
