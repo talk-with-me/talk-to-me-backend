@@ -28,56 +28,28 @@ scheduler = BackgroundScheduler()
 
 
 # ===== REST =====
-@app.route("/auth", methods=["GET"])
-def user_auth():
-    print('auth received')
-    """Generates an id and secret for the user, stores them and returns them
-    to user.
-    """
+@app.route("/queue", methods=["POST"])
+def request_queue():
+    """Generates user info and places them into a queue, returning info"""
+    print('queue received')
+
+    user_ip = request.headers.get('X-Real-Ip', request.remote_addr)
     user_id = str(uuid.uuid4())
     user_secret = str(uuid.uuid4())
-    user_obj = {
-        "ip": request.headers.get('X-Real-Ip', request.remote_addr),
+    user_object = {
+        "ip": user_ip,
         "user_id": user_id,
         "secret": user_secret,
-        "queueType": "idle",
+        "queueType": "banned" if ip_is_banned(user_ip) else "searching",
         "time": time.time(),
-        "room": "lonely",
+        "room": "none",
         "sid": None,
     }
 
-    mdb.userDetails.insert_one(user_obj)
-    return success(user_obj)
+    mdb.userDetails.insert_one(user_object)
 
-
-@app.route("/queue", methods=["POST"])
-@expect_json(secret=str, queueType=str)
-def request_queue(body):
-    print('queue received')
-    """User chooses queueType."""
-    user_object = mdb.userDetails.find_one(
-        {"secret": body["secret"]}  # Fetches user from db
-    )
-
-    if user_object is not None:
-        if ip_is_banned(user_object["ip"]):
-            print("user was placed in ban")
-            mdb.userDetails.update_one(
-                {"secret": body["secret"]},
-                {"$set": {"queueType": "banned", "time": time.time()}},
-            )
-            return success("you have been placed in queue")
-        elif (user_object["queueType"] != "idle" or
-              user_object["room"] != "lonely"):
-            return error(403, "nah you already in queue or in a room")
-
-        mdb.userDetails.update_one(
-            {"secret": body["secret"]},
-            {"$set": {"queueType": body["queueType"], "time": time.time()}},
-        )
-        return success("you have been placed in queue")
-    return error(403, "go do auth first you dummy")
-
+    socketio.emit('test', 'Heyo!');
+    return success({"id": user_id, "secret": user_secret})
 
 @app.route("/messages", methods=["POST"])
 @expect_json(secret=str, message=str, nonce=str)
@@ -223,6 +195,22 @@ def user_join_room(secret):
 
 
 @socketio.on("hello")
+def user_sid_assoc(secret):
+    """Associates a SocketIO session ID with a user object."""
+    user = mdb.userDetails.find_one({"secret": secret})  # fetch user from db
+    if user is None:
+        print("user_sid_assoc: user not found")
+        return
+    # noinspection PyUnresolvedReferences
+    # provided by socketio
+    sid = request.sid
+    # remove existing users with same sid
+    mdb.userDetails.delete_many({"sid": sid, "secret": {"$ne": secret}})
+    mdb.userDetails.update_one({"secret": secret}, {"$set": {"sid": sid}})
+    print("User {user['user_id']} has socket session ID" + sid)
+
+
+@socketio.on("test")
 def user_sid_assoc(secret):
     """Associates a SocketIO session ID with a user object."""
     user = mdb.userDetails.find_one({"secret": secret})  # fetch user from db
