@@ -26,13 +26,11 @@ python-dateutil==2.8.1
 python-engineio==3.13.2
 python-socketio==4.6.0
 pytz==2020.1
-redis==3.5.3
 regex==2020.11.13
 requests==2.25.1
 sacremoses==0.0.43
 six==1.15.0
 tokenizers==0.9.4
-torch==1.7.1
 tqdm==4.55.1
 transformers==4.1.1
 typing-extensions==3.7.4.3
