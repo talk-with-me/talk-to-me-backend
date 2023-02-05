@@ -65,6 +65,29 @@ def test_emit_room(json_body):
     socketio.emit('test', {'manual':'test_room'}, room=room)
     return success('success!')
 
+@app.route("/typing", methods=["POST"])
+@expect_json(user_id=str, secret=str, typing=bool)
+def handle_typing(json_body):
+    """User starts/stop typing"""
+    author_obj = mdb.users.find_one({"user_id": json_body["user_id"], "secret": json_body["secret"]})
+    
+    if author_obj is None:
+        return error(403, "user not found")
+
+    recipient_obj = mdb.users.find_one({"room": author_obj["room"], "user_id": {"$ne": author_obj["user_id"]}})
+
+    if recipient_obj is None:
+        return error(403, "user(s) not found")
+
+    if typing:
+        socketio.emit("partner_starts_typing",
+                room=recipient_obj["sid"])
+    else:
+        socketio.emit("partner_stops_typing",
+                room=recipient_obj["sid"])
+
+    return success("partner starting typing" if typing else "partner stopped typing", 201)
+
 @app.route("/messages", methods=["POST"])
 @expect_json(message_id=str, user_id=str, secret=str, content=str)
 def handle_message(json_body):
